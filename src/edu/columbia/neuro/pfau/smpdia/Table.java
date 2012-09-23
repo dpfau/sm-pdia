@@ -10,11 +10,14 @@ package edu.columbia.neuro.pfau.smpdia;
  * @author davidpfau
  */
 public class Table<T> extends Customer<T> {
+    private static final int blocksize = 64; // Allocate seats at the table in blocks, to avoid unnecessary memory allocation.
     private Customer[] customers;
+    private int size;
     private T dish;
 
     public Table() {
-        customers = new Customer[0];
+        customers = new Customer[blocksize];
+        size = 0;
     }
 
     public void setDish(T d) {
@@ -26,32 +29,30 @@ public class Table<T> extends Customer<T> {
     }
 
     public int size() {
-        return customers.length;
+        return size;
     }
 
-    public void seat(Customer c) {
-        Customer[] foo = new Customer[customers.length+1];
-        System.arraycopy(customers,0,foo,0,customers.length);
-        foo[customers.length] = c;
-        c.t = this;
-        c.seat = customers.length;
-        System.out.println(foo.length);
-        customers = foo;
+    public void add(Customer c) {
+        if (size == customers.length) {
+            Customer[] foo = new Customer[size+blocksize];
+            System.arraycopy(customers,0,foo,0,size);
+            customers = foo;
+        }
+        c.add(this, size);
+        customers[size] = c;
+        size++;
     }
 
-    public void unseat(Customer c) throws Exception {
-        if (c.t == this) {
-            if (c.seat >= 0 && c.seat < customers.length) {
+    public void remove(Customer c) throws Exception {
+        if (this == c.table()) {
+            if (c.seat >= 0 && c.seat < size) {
                 if (customers[c.seat] == c) {
-                    Customer[] foo = new Customer[customers.length - 1];
-                    // System.out.println(customers.length-1);
-                    // System.out.println(c.seat);
-                    System.arraycopy(customers, 0, foo, 0, c.seat - 1);
-                    System.arraycopy(customers, c.seat + 1, foo, c.seat, customers.length - (c.seat + 1));
-                    customers = foo;
-                    for (int i = c.seat; i < customers.length; i++) {
+                    size--;
+                    for (int i = c.seat; i < size; i++) {
+                        customers[i] = customers[i+1];
                         customers[i].seat--;
                     }
+                    customers[size] = null;
                 } else {
                     throw new Exception("Customer is not seated at this table, though it believes it is.");
                 }

@@ -62,13 +62,22 @@ public class Restaurant<T> extends Distribution<T> {
         }
         cdf[tables.size()] = total + concentration + tables.size()*discount;
         int i = discreteSample(cdf);
-        if (i > tables.size()) {
+        System.out.println(i);
+        if (i >= tables.size()) {
             Table t = new Table();
-            t.seat(c);
+            t.add(c);
             return base.sampleAndAdd(t);
         } else {
-            tables.get(i).seat(c);
+            tables.get(i).add(c);
             return tables.get(i).getDish();
+        }
+    }
+
+    public void remove(Customer c) throws Exception {
+        Table t = c.table();
+        c.remove();
+        if (t.size() == 0) {
+            tables.remove(t);
         }
     }
 
@@ -79,5 +88,17 @@ public class Restaurant<T> extends Distribution<T> {
     // Return the log likelihood of the restaurant's configuration
     public double score() {
         return 0.0;
+    }
+
+    public void clean() {
+        ArrayList<Table<T>> toRemove = new ArrayList();
+        for (Table t: tables) {
+            if (t.size() == 0) {
+                toRemove.add(t);
+            }
+        }
+        for (Table t: toRemove) {
+            tables.remove(t);
+        }
     }
 }

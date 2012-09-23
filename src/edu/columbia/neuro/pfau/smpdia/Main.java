@@ -36,10 +36,11 @@ public class Main {
         for (int i = 0; i < 100; i++) {
             nodes[i] = new Node<Integer>();
             pdia.franchises.get(i % 10).sampleAndAdd(nodes[i]);
+            //System.out.println(pdia.franchises.get(i % 10).tables.size());
         }
         for (int i = 0; i < 100; i++) {
             try {
-                nodes[i].t.unseat(nodes[i]);
+                nodes[i].remove();
             } catch (Exception e) {
                 e.printStackTrace();
             }
