@@ -29,21 +29,28 @@ public class Main {
 //            e.printStackTrace();
 //        }
         PDIAPrior<Integer> pdia = new PDIAPrior();
-        Node<Integer> nodes[] = new Node[100];
+        Node<Integer> nodes[] = new Node[1000000];
         for (int i = 0; i < 10; i++) {
             pdia.franchises.put(i, new Restaurant<Node<Integer>>(pdia.base));
         }
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 1000000; i++) {
             nodes[i] = new Node<Integer>();
             pdia.franchises.get(i % 10).sampleAndAdd(nodes[i]);
+            if (i%1000 == 0) {
+                System.out.println(i + " - " + pdia.franchises.get(i % 10).size());
+            }
         }
         int tables = 0;
         for (int i = 0; i < 10; i++) {
             tables += pdia.franchises.get(i).tables.size();
+            System.out.println(pdia.franchises.get(i).tables.size());
         }
         System.out.println(tables);
         System.out.println(pdia.base.customers()); // should equal the above, as each low-level table is a high-level customer
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 1000000; i++) {
+            if (i%1000 == 0) {
+                System.out.println(":" + i);
+            }
             try {
                 pdia.franchises.get(i % 10).remove(nodes[i]);
             } catch (Exception e) {
