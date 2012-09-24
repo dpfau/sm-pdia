@@ -36,15 +36,21 @@ public class Main {
         for (int i = 0; i < 100; i++) {
             nodes[i] = new Node<Integer>();
             pdia.franchises.get(i % 10).sampleAndAdd(nodes[i]);
-            //System.out.println(pdia.franchises.get(i % 10).tables.size());
         }
+        int tables = 0;
+        for (int i = 0; i < 10; i++) {
+            tables += pdia.franchises.get(i).tables.size();
+        }
+        System.out.println(tables);
+        System.out.println(pdia.base.customers()); // should equal the above, as each low-level table is a high-level customer
         for (int i = 0; i < 100; i++) {
             try {
-                nodes[i].remove();
+                pdia.franchises.get(i % 10).remove(nodes[i]);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+        System.out.println(pdia.base.customers());
     }
 
 }

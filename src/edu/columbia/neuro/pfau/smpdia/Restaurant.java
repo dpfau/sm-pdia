@@ -27,6 +27,18 @@ public class Restaurant<T> extends Distribution<T> {
         discount = (float)0.5;
     }
 
+    public int size() {
+        return tables.size();
+    }
+
+    public int customers() {
+        int i = 0;
+        for(Table t: tables) {
+            i += t.size();
+        }
+        return i;
+    }
+
     private int discreteSample(double[] cdf) {
         double samp = cdf[cdf.length-1] * r.nextFloat();
         for (int i = 0; i < cdf.length; i++) {
@@ -62,10 +74,10 @@ public class Restaurant<T> extends Distribution<T> {
         }
         cdf[tables.size()] = total + concentration + tables.size()*discount;
         int i = discreteSample(cdf);
-        System.out.println(i);
         if (i >= tables.size()) {
             Table t = new Table();
             t.add(c);
+            tables.add(t);
             return base.sampleAndAdd(t);
         } else {
             tables.get(i).add(c);
@@ -78,6 +90,7 @@ public class Restaurant<T> extends Distribution<T> {
         c.remove();
         if (t.size() == 0) {
             tables.remove(t);
+            base.remove(t);
         }
     }
 

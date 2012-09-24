@@ -18,6 +18,8 @@ public class NodeDist<D> extends Distribution<Node<D>> {
         return new Node<D>();
     }
 
+    public void remove(Customer c) {}
+
     public double score(Customer[] d) {
         return 0.0;
     }
