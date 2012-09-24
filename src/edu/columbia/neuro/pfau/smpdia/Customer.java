@@ -10,21 +10,13 @@ package edu.columbia.neuro.pfau.smpdia;
  * @author davidpfau
  */
 public class Customer<T> {
-    private Table<T> t = null;
-    public int seat = -1;
-
-    public void add(Table t, int i) {
-        this.t = t;
-        this.seat = i;
-    }
-
-    public Table<T> table() {
-        return t;
-    }
+    public Table<T> table = null;
+    public Customer custRight = null;
+    public Customer custLeft  = null;
 
     public void remove() throws Exception {
-        if (t != null) {
-            t.remove(this);
+        if (table != null) {
+            table.remove(this);
         } else {
             throw new Exception("Customer has no table from which to be remove!");
         }

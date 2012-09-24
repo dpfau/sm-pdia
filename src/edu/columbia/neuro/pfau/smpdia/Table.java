@@ -10,13 +10,11 @@ package edu.columbia.neuro.pfau.smpdia;
  * @author davidpfau
  */
 public class Table<T> extends Customer<T> {
-    private static final int blocksize = 64; // Allocate seats at the table in blocks, to avoid unnecessary memory allocation.
-    private Customer[] customers;
+    private Customer root = null;
     private int size;
     private T dish;
 
     public Table() {
-        customers = new Customer[blocksize];
         size = 0;
     }
 
@@ -32,35 +30,48 @@ public class Table<T> extends Customer<T> {
         return size;
     }
 
+    public Customer root() {
+        return root;
+    }
+
     public void add(Customer c) {
-        if (size == customers.length) {
-            Customer[] foo = new Customer[size+blocksize];
-            System.arraycopy(customers,0,foo,0,size);
-            customers = foo;
+        c.table = this;
+        c.custLeft = null;
+        c.custRight = root;
+        if (root != null) {
+            root.custLeft = c;
         }
-        c.add(this, size);
-        customers[size] = c;
+        root = c;
         size++;
     }
 
     public void remove(Customer c) throws Exception {
-        if (this == c.table()) {
-            if (c.seat >= 0 && c.seat < size) {
-                if (customers[c.seat] == c) {
-                    size--;
-                    for (int i = c.seat; i < size; i++) {
-                        customers[i] = customers[i+1];
-                        customers[i].seat--;
-                    }
-                    customers[size] = null;
+        if (c.table == this) {
+            if (c.custLeft == null) {
+                if (root == c) {
+                    root = c.custRight;
                 } else {
-                    throw new Exception("Customer is not seated at this table, though it believes it is.");
+                    throw new Exception("Non-root customer has no left neighbor!");
                 }
             } else {
-                throw new Exception("Customer believes it is seated out of bounds.");
+                if (c.custLeft.table == this) {
+                    c.custLeft.custRight = c.custRight;
+                } else {
+                    throw new Exception("Customer to the left is seated at a different table!");
+                }
             }
+            if (c.custRight != null) {
+                if (c.custRight.table == this) {
+                    c.custRight.custLeft = c.custLeft;
+                } else {
+                    throw new Exception("Customer to the right is seated at a different table!");
+                }
+            }
+            size--;
+            c.custLeft  = null;
+            c.custRight = null;
         } else {
-            throw new Exception("Customer does not believe it is seated at this table.");
+            throw new Exception("Customer is not seated at this table!");
         }
     }
 }

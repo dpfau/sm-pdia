@@ -86,7 +86,7 @@ public class Restaurant<T> extends Distribution<T> {
     }
 
     public void remove(Customer c) throws Exception {
-        Table t = c.table();
+        Table t = c.table;
         c.remove();
         if (t.size() == 0) {
             tables.remove(t);
