@@ -75,14 +75,7 @@ public class Restaurant<T> extends Distribution<T> {
             Table t = new Table();
             add(c,t);
             tables.add(t);
-            // If necessary, increase the size of pdf, and update with new entry
-            if (tables.size() == pdf.length) {
-                double[] foo = new double[pdf.length + BLOCKSIZE];
-                System.arraycopy(pdf, 0, foo, 0, tables.size());
-                pdf = foo;
-            }
-            pdf[size()] = pdf[size() - 1] + discount;
-            pdf[size() - 1] = 1 - discount;
+            growPDF();
             return base.sampleAndAdd(t);
         } else {
             add(c,tables.get(i));
@@ -100,6 +93,17 @@ public class Restaurant<T> extends Distribution<T> {
         }
         t.root = c;
         t.size++;
+    }
+
+    private void growPDF() {
+        // If necessary, increase the size of pdf, and update with new entry
+        if (tables.size() == pdf.length) {
+            double[] foo = new double[pdf.length + BLOCKSIZE];
+            System.arraycopy(pdf, 0, foo, 0, tables.size());
+            pdf = foo;
+        }
+        pdf[size()] = pdf[size() - 1] + discount;
+        pdf[size() - 1] = 1 - discount;
     }
 
     public void remove(Customer c) throws Exception {
@@ -149,7 +153,35 @@ public class Restaurant<T> extends Distribution<T> {
     }
 
     public double score(Customer[] c) {
-        return base.score(c);
+        // Current method just adds every customer to this restaurant and scores one by one.  Slow?
+        double score = 0.0;
+        ArrayList<Integer> newTables = new ArrayList();
+        for (int i = 0; i < c.length; i++) {
+            if (!tables.contains(c[i].table)) {
+                score += Math.log(pdf[size()]) - Math.log(cumSum);
+                growPDF();
+                tables.add(c[i].table);
+                newTables.add(i);
+            } else {
+                int j = tables.indexOf(c[i].table);
+                score += Math.log(pdf[j]) - Math.log(cumSum);
+                pdf[j]++;
+            }
+            add(c[i], c[i].table);
+            cumSum++;
+        }
+        for (int i = 0; i < c.length; i++) {
+            try {
+                remove(c[i]);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        Customer[] t = new Customer[newTables.size()];
+        for (int i = 0; i < newTables.size(); i++) {
+            t[i] = c[newTables.get(i)].table;
+        }
+        return score + base.score(t);
     }
 
     // Return the log likelihood of the restaurant's configuration

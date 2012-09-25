@@ -20,7 +20,7 @@ public class NodeDist<D> extends Distribution<Node<D>> {
 
     public void remove(Customer c) {}
 
-    public double score(Customer[] d) {
+    public double score(Customer[] c) {
         return 0.0;
     }
 }
