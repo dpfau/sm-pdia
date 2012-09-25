@@ -6,6 +6,7 @@ package edu.columbia.neuro.pfau.smpdia;
 
 import java.util.ArrayList;
 import java.util.Random;
+import org.apache.commons.math3.special.Gamma;
 
 /**
  *
@@ -138,9 +139,10 @@ public class Restaurant<T> extends Distribution<T> {
             cumSum--;
             if (t.size == 0) {
                 tables.remove(i);
-                for (int j = i; j < size(); j++) {
+                for (int j = i; j < size() + 1; j++) {
                     pdf[j] = pdf[j + 1];
                 }
+                pdf[size()] -= discount;
                 base.remove(t);
             }
         }
@@ -152,11 +154,38 @@ public class Restaurant<T> extends Distribution<T> {
 
     // Return the log likelihood of the restaurant's configuration
     public double score() {
-        return 0.0;
+        double score = Gamma.logGamma(concentration) - Gamma.logGamma(cumSum);
+        if (discount != 0) {
+            score += tables.size()*Math.log(discount)
+                  + Gamma.logGamma(concentration/discount + tables.size())
+                  - Gamma.logGamma(concentration/discount)
+                  - tables.size()*Gamma.logGamma(1 - discount);
+        } else {
+            score += tables.size()*Math.log(concentration);
+        }
+        for (int i = 0; i < size(); i++) {
+            score += Gamma.logGamma(pdf[i]);
+        }
+        return score;
     }
 
     // Check that the fields pdf and cumSum are consistent.
     public boolean testPDF() {
+        double cumSum2 = 0.0;
+        for (int i = 0; i < size() + 1; i++) {
+            cumSum2+= pdf[i];
+        }
+        if (cumSum != cumSum2) {
+            return false;
+        }
+        for (int i = 0; i < size(); i++ ) {
+            if (pdf[i] != tables.get(i).size - discount) {
+                return false;
+            }
+        }
+        if (pdf[size()] != concentration + discount*size() ) {
+            return false;
+        }
         return true;
     }
 }
