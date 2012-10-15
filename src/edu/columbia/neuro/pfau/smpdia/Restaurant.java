@@ -5,6 +5,7 @@
 package edu.columbia.neuro.pfau.smpdia;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Random;
 import org.apache.commons.math3.special.Gamma;
 
@@ -153,35 +154,74 @@ public class Restaurant<T> extends Distribution<T> {
     }
 
     public double score(Customer[] c) {
-        // Current method just adds every customer to this restaurant and scores one by one.  Slow?
-        double score = 0.0;
-        ArrayList<Integer> newTables = new ArrayList();
+//        // Current method just adds every customer to this restaurant and scores one by one.  Slow?
+//        double score = 0.0;
+//        ArrayList<Integer> newTables = new ArrayList();
+//        for (int i = 0; i < c.length; i++) {
+//            if (!tables.contains(c[i].table)) {
+//                score += Math.log(pdf[size()]) - Math.log(cumSum);
+//                growPDF();
+//                tables.add(c[i].table);
+//                newTables.add(i);
+//            } else {
+//                int j = tables.indexOf(c[i].table);
+//                score += Math.log(pdf[j]) - Math.log(cumSum);
+//                pdf[j]++;
+//            }
+//            add(c[i], c[i].table);
+//            cumSum++;
+//        }
+//        for (int i = 0; i < c.length; i++) {
+//            try {
+//                remove(c[i]);
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//            }
+//        }
+//        Customer[] t = new Customer[newTables.size()];
+//        for (int i = 0; i < newTables.size(); i++) {
+//            t[i] = c[newTables.get(i)].table;
+//        }
+//        return score + base.score(t);
+        double score = Gamma.logGamma(cumSum) - Gamma.logGamma(cumSum + c.length);
+        HashMap<Integer,Integer>  oldTables = new HashMap(); // Count of customers added to existing tables
+        HashMap<Table<T>,Integer> newTables = new HashMap(); // Count of customers added to new tables
         for (int i = 0; i < c.length; i++) {
-            if (!tables.contains(c[i].table)) {
-                score += Math.log(pdf[size()]) - Math.log(cumSum);
-                growPDF();
-                tables.add(c[i].table);
-                newTables.add(i);
+            int idx = tables.indexOf(c[i].table);
+            if (idx == -1) {
+                if (newTables.containsKey(c[i].table)) {
+                    int j = newTables.get(c[i].table);
+                    newTables.put(c[i].table, j++);
+                } else {
+                    newTables.put(c[i].table, 1);
+                }
             } else {
-                int j = tables.indexOf(c[i].table);
-                score += Math.log(pdf[j]) - Math.log(cumSum);
-                pdf[j]++;
-            }
-            add(c[i], c[i].table);
-            cumSum++;
-        }
-        for (int i = 0; i < c.length; i++) {
-            try {
-                remove(c[i]);
-            } catch (Exception e) {
-                e.printStackTrace();
+                // Still not sure if it's faster to do it this way or just make a big, mostly sparse array the same length as the number of instantiated tables
+                if (oldTables.containsKey(idx)) {
+                    int j = oldTables.get(idx);
+                    oldTables.put(idx, j++);
+                } else {
+                    oldTables.put(idx, 1);
+                }
             }
         }
-        Customer[] t = new Customer[newTables.size()];
-        for (int i = 0; i < newTables.size(); i++) {
-            t[i] = c[newTables.get(i)].table;
+        for (Integer i: oldTables.keySet()) {
+            score += Gamma.logGamma(oldTables.get(i) + pdf[i] - discount) 
+                   - Gamma.logGamma(pdf[i] - discount);
         }
-        return score + base.score(t);
+        for (Table<T> t: newTables.keySet()) {
+            score += Gamma.logGamma(newTables.get(t) - discount);
+        }
+        if (discount != 0) {
+            score += newTables.size()*Math.log(discount)
+                  + Gamma.logGamma(concentration/discount + tables.size() + newTables.size())
+                  - Gamma.logGamma(concentration/discount + tables.size())
+                  - newTables.size()*Gamma.logGamma(1 - discount);
+        } else {
+            score += newTables.size()*Gamma.logGamma(concentration);
+        }
+        score += base.score((Customer[])newTables.keySet().toArray());
+        return score;
     }
 
     // Return the log likelihood of the restaurant's configuration
@@ -196,7 +236,7 @@ public class Restaurant<T> extends Distribution<T> {
             score += tables.size()*Math.log(concentration);
         }
         for (int i = 0; i < size(); i++) {
-            score += Gamma.logGamma(pdf[i]);
+            score += Gamma.logGamma(pdf[i] - discount);
         }
         return score;
     }
