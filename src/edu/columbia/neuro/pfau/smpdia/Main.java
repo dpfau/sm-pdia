@@ -36,17 +36,44 @@ public class Main {
         for (int i = 0; i < 1000000; i++) {
             nodes[i] = new Node<Integer>();
             pdia.franchises.get(i % 10).sampleAndAdd(nodes[i]);
-            if (i%1000 == 0) {
-                System.out.println(i + " - " + pdia.franchises.get(i % 10).size() + ": " + pdia.franchises.get(i % 10).score());
-            }
         }
+        double score1 = pdia.base.score();
+        for (int i = 0; i < 10; i++) {
+            score1 += pdia.franchises.get(i).score();
+        }
+        System.out.println(score1);
+        Node<Integer> removed[] = new Node[100000];
         for (int i = 0; i < 100000; i++) {
             try {
-                pdia.franchises.get(i % 10).remove(nodes[i]);
+                pdia.franchises.get(0).remove(nodes[i*10]);
+                removed[i] = nodes[i*10];
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+        double score2 = pdia.base.score();
+        for (int i = 0; i < 10; i++) {
+            score2 += pdia.franchises.get(i).score();
+        }
+        System.out.println(score2 + pdia.franchises.get(0).score(removed));
+        for (int i = 0; i < 100000; i++) {
+            pdia.franchises.get(0).add(removed[i], removed[i].table);
+            for (Table t: pdia.franchises.get(0).tables) {
+                pdia.base.add(t, t.table);
+            }
+        }
+        for (int i = 0; i < 100000; i++) {
+            try {
+                pdia.franchises.get(0).remove(removed[i]);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        score2 = pdia.base.score();
+        for (int i = 0; i < 10; i++) {
+            score2 += pdia.franchises.get(i).score();
+        }
+        System.out.println(score2 + pdia.franchises.get(0).score(removed));
     }
 
 }

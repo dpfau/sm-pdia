@@ -22,7 +22,7 @@ public class Restaurant<T> extends Distribution<T> {
     private Random r;
     private double[] pdf;
     private double cumSum;
-    private static final int BLOCKSIZE = 64;
+    private static final int BLOCKSIZE = 32;
 
     public Restaurant(Distribution d) {
         base = d;
@@ -74,18 +74,30 @@ public class Restaurant<T> extends Distribution<T> {
         int i = discreteSample();
         if (i >= tables.size()) {
             Table t = new Table();
-            add(c,t);
+            assign(c,t);
             tables.add(t);
             growPDF();
             return base.sampleAndAdd(t);
         } else {
-            add(c,tables.get(i));
+            assign(c,tables.get(i));
             pdf[i]++;
             return tables.get(i).getDish();
         }
     }
 
-    private void add(Customer c, Table t) {
+    public void add(Customer c, Table t) {
+        cumSum++;
+        assign(c,t);
+        int i = tables.indexOf(t);
+        if (i != -1) {
+            pdf[i]++;
+        } else {
+            tables.add(t);
+            growPDF();
+        }
+    }
+    
+    public void assign(Customer c, Table t) {
         c.table = t;
         c.custLeft = null;
         c.custRight = t.root;
@@ -103,8 +115,12 @@ public class Restaurant<T> extends Distribution<T> {
             System.arraycopy(pdf, 0, foo, 0, tables.size());
             pdf = foo;
         }
-        pdf[size()] = pdf[size() - 1] + discount;
-        pdf[size() - 1] = 1 - discount;
+        if (size() != 0) {
+            pdf[size()] = pdf[size() - 1] + discount;
+            pdf[size() - 1] = 1 - discount;
+        } else {
+            pdf[0] = concentration;
+        }
     }
 
     public void remove(Customer c) throws Exception {
@@ -154,7 +170,7 @@ public class Restaurant<T> extends Distribution<T> {
     }
 
     public double score(Customer[] c) {
-//        // Current method just adds every customer to this restaurant and scores one by one.  Slow?
+        // Current method just adds every customer to this restaurant and scores one by one.  Slow?
 //        double score = 0.0;
 //        ArrayList<Integer> newTables = new ArrayList();
 //        for (int i = 0; i < c.length; i++) {
@@ -168,7 +184,13 @@ public class Restaurant<T> extends Distribution<T> {
 //                score += Math.log(pdf[j]) - Math.log(cumSum);
 //                pdf[j]++;
 //            }
-//            add(c[i], c[i].table);
+//            assign(c[i], c[i].table);
+//            if (base instanceof Restaurant) {
+//                Restaurant r = (Restaurant) base;
+//                if (!tables.contains(c[i].table)) {
+//                    r.assign(c[i].table,c[i].table.table);
+//                }
+//            }
 //            cumSum++;
 //        }
 //        for (int i = 0; i < c.length; i++) {
@@ -206,8 +228,8 @@ public class Restaurant<T> extends Distribution<T> {
             }
         }
         for (Integer i: oldTables.keySet()) {
-            score += Gamma.logGamma(oldTables.get(i) + pdf[i] - discount) 
-                   - Gamma.logGamma(pdf[i] - discount);
+            score += Gamma.logGamma(oldTables.get(i) + pdf[i]) 
+                   - Gamma.logGamma(pdf[i]);
         }
         for (Table<T> t: newTables.keySet()) {
             score += Gamma.logGamma(newTables.get(t) - discount);
@@ -220,7 +242,7 @@ public class Restaurant<T> extends Distribution<T> {
         } else {
             score += newTables.size()*Gamma.logGamma(concentration);
         }
-        score += base.score((Customer[])newTables.keySet().toArray());
+        score += base.score((Customer[])(newTables.keySet().toArray(new Customer[newTables.size()])));
         return score;
     }
 
@@ -236,7 +258,7 @@ public class Restaurant<T> extends Distribution<T> {
             score += tables.size()*Math.log(concentration);
         }
         for (int i = 0; i < size(); i++) {
-            score += Gamma.logGamma(pdf[i] - discount);
+            score += Gamma.logGamma(pdf[i]);
         }
         return score;
     }
