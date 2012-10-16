@@ -9,6 +9,7 @@ import edu.columbia.neuro.pfau.smpdia.Uniform;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
+import org.apache.commons.math3.special.Gamma;
 
 /**
  *
@@ -149,35 +150,102 @@ public class ChineseRestaurantFranchise<T> {
     }
     
     public double score() {
-        return 0.0;
+        double score = Gamma.logGamma(concentrations[0]) - Gamma.logGamma(concentrations[0] + N[0]);
+        if (discounts[0] != 0) {
+            score += dishes.size() * Math.log(discounts[0])
+                  +  Gamma.logGamma(concentrations[0] / discounts[0] + dishes.size())
+                  -  Gamma.logGamma(concentrations[0] / discounts[0])
+                  - dishes.size() * Gamma.logGamma(1 - discounts[0]);
+        } else {
+            score += dishes.size() * Math.log(concentrations[0]);
+        }
+        for (Object t: dishMap.keySet()) {
+            score += Gamma.logGamma(((ArrayList)dishMap.get(t)).size() - discounts[0]);
+        }
+        
+        for (int i = 0; i < numFranchise; i++) {
+            int size = franchise[i].size();
+            score += Gamma.logGamma(concentrations[i+1]) - Gamma.logGamma(concentrations[i+1] + N[i+1]);
+            if (discounts[i+1] != 0) {
+                score += size * Math.log(discounts[i+1])
+                      + Gamma.logGamma(concentrations[i+1] / discounts[i+1] + size)
+                      - Gamma.logGamma(concentrations[i+1] / discounts[i+1])
+                      - size * Gamma.logGamma(1 - discounts[i+1]);
+            } else {
+                score += size * Math.log(concentrations[i+1]);
+            }
+            for (int j = 0; j < size; j++) {
+                score += Gamma.logGamma(franchise[i].get(j).size() - discounts[i+1]);
+            }
+        }
+        return score;
     }
     
     public double score(Customer<T>[] c, ArrayList<Customer<T>>[] t, int[] n) {
-        return 0.0;
+        double score = 0.0;
+        assert(c.length == t.length);
+        assert(c.length == n.length);
+        HashMap<T,Integer>       newDishes = new HashMap();
+        HashMap<Integer,Integer> oldDishes = new HashMap();
+        
+        HashMap<ArrayList<Customer<T>>, Integer>[] newTables = new HashMap[numFranchise];
+        HashMap<Integer,Integer>[]                 oldTables = new HashMap[numFranchise];
+        for (int i = 0; i < numFranchise; i++) {
+            newTables[i] = new HashMap();
+            oldTables[i] = new HashMap();
+        }
+        for (int i = 0; i < c.length; i++) {
+            int idx = franchise[n[i]].indexOf(t[i]);
+            if (idx != -1) {
+                incHash(oldTables[n[i]], idx);
+            } else {
+                incHash(newTables[n[i]], t[i]);
+                idx = dishes.indexOf(c[i].val);
+                if (idx != -1) {
+                    incHash(oldDishes, idx);
+                } else {
+                    incHash(newDishes, c[i].val);
+                }
+            }
+        }
+        // Compute the actual score here.
+        return score;
+    }
+    
+    private <E> void incHash(HashMap<E,Integer> hm, E key) {
+        if (hm.containsKey(key)) {
+            Integer ct = hm.get(key);
+            hm.put(key, ct++);
+        } else {
+            hm.put(key, 1);
+        }
     }
     
     public static void main(String args[]) {
         ChineseRestaurantFranchise crf = new ChineseRestaurantFranchise<Float>(10, new Uniform());
         Customer[] cust = new Customer[1000000];
+        int[] franch = new int[1000000];
         ArrayList<Customer<Float>>[] tables = new ArrayList[1000000]; 
         for(int i = 0; i < 1000000; i++) {
             cust[i] = new Customer();
             tables[i] = crf.sampleAndAdd(cust[i],i%10);
+            franch[i] = i%10;
         }
-        for (int i = 0; i < crf.N.length; i++) {
-            System.out.println(crf.N[i]);
-        }
-        System.out.println(crf.dishes.size());
-        int ntable = 0;
-        int ntable1 = 0;
-        for (int i = 0; i < 10; i++) {
-            ntable  += crf.franchise[i].size();
-        }
-        for (Object t: crf.dishMap.keySet()) {
-            ntable1 += ((ArrayList)crf.dishMap.get(t)).size();
-        }
-        System.out.println(ntable);
-        System.out.println(ntable1);
+//        for (int i = 0; i < crf.N.length; i++) {
+//            System.out.println(crf.N[i]);
+//        }
+//        System.out.println(crf.dishes.size());
+//        int ntable = 0;
+//        int ntable1 = 0;
+//        for (int i = 0; i < 10; i++) {
+//            ntable  += crf.franchise[i].size();
+//        }
+//        for (Object t: crf.dishMap.keySet()) {
+//            ntable1 += ((ArrayList)crf.dishMap.get(t)).size();
+//        }
+//        System.out.println(ntable);
+//        System.out.println(ntable1);
+        System.out.println(crf.score());
         for (int i = 0; i < 1000000; i++) {
             try {
                 crf.remove(cust[i],tables[i],i%10);
@@ -185,16 +253,17 @@ public class ChineseRestaurantFranchise<T> {
                 e.printStackTrace();
             }
         }
+        System.out.println(crf.score(cust,tables,franch));
         
-        ntable = 0;
-        ntable1 = 0;
-        for (int i = 0; i < 10; i++) {
-            ntable  += crf.franchise[i].size();
-        }
-        for (Object t: crf.dishMap.keySet()) {
-            ntable1 += ((ArrayList)crf.dishMap.get(t)).size();
-        }
-        System.out.println(ntable);
-        System.out.println(ntable1);
+//        ntable = 0;
+//        ntable1 = 0;
+//        for (int i = 0; i < 10; i++) {
+//            ntable  += crf.franchise[i].size();
+//        }
+//        for (Object t: crf.dishMap.keySet()) {
+//            ntable1 += ((ArrayList)crf.dishMap.get(t)).size();
+//        }
+//        System.out.println(ntable);
+//        System.out.println(ntable1);
     }
 }
