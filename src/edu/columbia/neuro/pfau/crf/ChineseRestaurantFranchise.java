@@ -9,6 +9,7 @@ import edu.columbia.neuro.pfau.smpdia.Uniform;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
+import java.util.UUID;
 import org.apache.commons.math3.special.Gamma;
 
 /**
@@ -22,12 +23,13 @@ public class ChineseRestaurantFranchise<T> {
     public int[] N; // Number of customers in each restaurant
     public Distribution<T> base;
     private Random r = new Random();
+    private UUID uuid;
     // private double[][] pdf; // For faster sampling, don't have to construct these on the fly
     
     // The following data structures are two ways of pointing to the same ArrayList<Customer<T>> objects
-    public ArrayList<ArrayList<Customer<T>>>[] franchise; // Useful for tracking counts within a restaurant
+    public ArrayList<Table<T>>[] franchise; // Useful for tracking counts within a restaurant
     public ArrayList<T> dishes;
-    public HashMap<T,ArrayList<ArrayList<Customer<T>>>> dishMap; // Useful for tracking all tables serving the same dish
+    public HashMap<T,ArrayList<Table<T>>> dishMap; // Useful for tracking all tables serving the same dish
     
     public ChineseRestaurantFranchise(int n, Distribution base) {
         this.base = base;
@@ -41,7 +43,7 @@ public class ChineseRestaurantFranchise<T> {
         
         franchise = new ArrayList[n];
         for (int i = 0; i < n; i++) {
-            franchise[i] = new ArrayList<ArrayList<Customer<T>>>();
+            franchise[i] = new ArrayList<Table<T>>();
         }
         dishes = new ArrayList();
         dishMap = new HashMap();
@@ -87,16 +89,16 @@ public class ChineseRestaurantFranchise<T> {
     }
     
     // Sample lower-level restaurant
-    public ArrayList<Customer<T>> sampleAndAdd(Customer<T> c, int n) {
+    public Table<T> sampleAndAdd(Customer<T> c, int n) {
         N[n + 1]++;
         double pdf[] = new double[franchise[n].size()];
         for (int i = 0; i < franchise[n].size(); i++) {
             pdf[i] = franchise[n].get(i).size() - discounts[n + 1];
         }
         int samp = discreteSample(pdf, concentrations[n + 1] + N[n + 1] - 1);
-        ArrayList<Customer<T>> t;
+        Table<T> t;
         if (samp == franchise[n].size()) {
-            t = new ArrayList<Customer<T>>();
+            t = new Table<T>(UUID.randomUUID());
             c.val = sampleAndAdd(t);
             t.add(c);
             franchise[n].add(t);
@@ -109,7 +111,7 @@ public class ChineseRestaurantFranchise<T> {
     }
     
     // Sample top-level restaurant
-    public T sampleAndAdd(ArrayList<Customer<T>> t) {
+    public T sampleAndAdd(Table<T> t) {
         N[0]++;
         double pdf[] = new double[dishMap.size()];
         for (int i = 0; i < dishes.size(); i++) {
@@ -120,16 +122,16 @@ public class ChineseRestaurantFranchise<T> {
         if (samp == dishes.size()) {
             sample = base.sample();
             dishes.add(sample);
-            dishMap.put(sample, new ArrayList<ArrayList<Customer<T>>>());
+            dishMap.put(sample, new ArrayList<Table<T>>());
         } else {
             sample = dishes.get(samp);
         }
-        ArrayList<ArrayList<Customer<T>>> tables = dishMap.get(sample);
+        ArrayList<Table<T>> tables = dishMap.get(sample);
         tables.add(t);
         return sample;
     }
     
-    public void remove(Customer<T> c, ArrayList<Customer<T>> t, int n) throws Exception {
+    public void remove(Customer<T> c, Table<T> t, int n) throws Exception {
         int idx = t.indexOf(c);
         if (idx == -1) {
             throw new Exception("Customer not seated at this table");
@@ -139,7 +141,7 @@ public class ChineseRestaurantFranchise<T> {
             if (t.isEmpty()) {
                 N[0]--;
                 franchise[n].remove(t);
-                ArrayList<ArrayList<Customer<T>>> tables = dishMap.get(c.val);
+                ArrayList<Table<T>> tables = dishMap.get(c.val);
                 tables.remove(t);
                 if (tables.isEmpty()) {
                     dishMap.remove(c.val);
@@ -150,6 +152,7 @@ public class ChineseRestaurantFranchise<T> {
     }
     
     public double score() {
+        System.out.println(N[0]);
         double score = Gamma.logGamma(concentrations[0]) - Gamma.logGamma(concentrations[0] + N[0]);
         if (discounts[0] != 0) {
             score += dishes.size() * Math.log(discounts[0])
@@ -181,41 +184,86 @@ public class ChineseRestaurantFranchise<T> {
         return score;
     }
     
-    public double score(Customer<T>[] c, ArrayList<Customer<T>>[] t, int[] n) {
-        double score = 0.0;
+    public double score(Customer<T>[] c, Table<T>[] t, int[] n) {
         assert(c.length == t.length);
         assert(c.length == n.length);
+        int[] M = new int[numFranchise+1];
         HashMap<T,Integer>       newDishes = new HashMap();
         HashMap<Integer,Integer> oldDishes = new HashMap();
         
-        HashMap<ArrayList<Customer<T>>, Integer>[] newTables = new HashMap[numFranchise];
-        HashMap<Integer,Integer>[]                 oldTables = new HashMap[numFranchise];
+        HashMap<Table<T>, Integer>[] newTables = new HashMap[numFranchise];
+        HashMap<Integer,Integer>[]   oldTables = new HashMap[numFranchise];
         for (int i = 0; i < numFranchise; i++) {
             newTables[i] = new HashMap();
             oldTables[i] = new HashMap();
         }
         for (int i = 0; i < c.length; i++) {
+            M[n[i]+1]++;
             int idx = franchise[n[i]].indexOf(t[i]);
             if (idx != -1) {
                 incHash(oldTables[n[i]], idx);
             } else {
-                incHash(newTables[n[i]], t[i]);
                 idx = dishes.indexOf(c[i].val);
                 if (idx != -1) {
                     incHash(oldDishes, idx);
                 } else {
-                    incHash(newDishes, c[i].val);
+                    if (newDishes.containsKey(c[i].val)) {
+                        if (!newTables[n[i]].containsKey(t[i])) {
+                            Integer ct = newDishes.get(c[i].val) + 1;
+                            newDishes.put(c[i].val, ct);
+                            M[0]++;
+                        }
+                    } else {
+                        newDishes.put(c[i].val, 1);
+                        M[0]++;
+                    }
                 }
+                incHash(newTables[n[i]], t[i]);
             }
         }
         // Compute the actual score here.
+        System.out.println(M[0]);
+        double score = Gamma.logGamma(concentrations[0] + N[0]) - Gamma.logGamma(concentrations[0] + N[0] + M[0]);
+        if (discounts[0] != 0) {
+            score += newDishes.size() * Math.log(discounts[0])
+                  +  Gamma.logGamma(concentrations[0] / discounts[0] + newDishes.size())
+                  -  Gamma.logGamma(concentrations[0] / discounts[0] + dishes.size());            
+        } else {
+            score += newDishes.size() * Math.log(concentrations[0]);
+        }
+        for(T dish : newDishes.keySet()) {
+            score += Gamma.logGamma(newDishes.get(dish) - discounts[0]) 
+                   - Gamma.logGamma(1 - discounts[0]);
+        }
+        for(Integer i: oldDishes.keySet()) {
+            score += Gamma.logGamma(oldDishes.get(i) - discounts[0]) 
+                   - Gamma.logGamma(dishMap.get(dishes.get(i)).size() - discounts[0]);
+        }
+        for (int i = 0; i < numFranchise; i++) {
+            score += Gamma.logGamma(concentrations[i+1] + N[i+1]) - Gamma.logGamma(concentrations[i+1] + N[i+1] + M[i+1]);
+            if (discounts[i+1] != 0) {
+                score += newDishes.size() * Math.log(discounts[i+1])
+                      +  Gamma.logGamma(concentrations[i+1] / discounts[i+1] + newTables[i].size())
+                      -  Gamma.logGamma(concentrations[i+1] / discounts[i+1] + franchise[i].size());                  
+            } else {
+                score += newTables[i].size() * Math.log(concentrations[i+1]);
+            }
+            for(Table<T> table: newTables[i].keySet()) {
+                score += Gamma.logGamma(newTables[i].get(table) - discounts[i+1])
+                       - Gamma.logGamma(1 - discounts[i+1]);
+            }
+            for(Integer j: oldTables[i].keySet()) {
+                score += Gamma.logGamma(oldTables[i].get(j) - discounts[i+1]) 
+                       - Gamma.logGamma(franchise[i].get(j).size() - discounts[i+1]);
+            }
+        }
         return score;
     }
     
     private <E> void incHash(HashMap<E,Integer> hm, E key) {
         if (hm.containsKey(key)) {
-            Integer ct = hm.get(key);
-            hm.put(key, ct++);
+            Integer ct = hm.get(key) + 1;
+            hm.put(key, ct);
         } else {
             hm.put(key, 1);
         }
@@ -225,7 +273,7 @@ public class ChineseRestaurantFranchise<T> {
         ChineseRestaurantFranchise crf = new ChineseRestaurantFranchise<Float>(10, new Uniform());
         Customer[] cust = new Customer[1000000];
         int[] franch = new int[1000000];
-        ArrayList<Customer<Float>>[] tables = new ArrayList[1000000]; 
+        Table<Float>[] tables = new Table[1000000]; 
         for(int i = 0; i < 1000000; i++) {
             cust[i] = new Customer();
             tables[i] = crf.sampleAndAdd(cust[i],i%10);
@@ -246,6 +294,7 @@ public class ChineseRestaurantFranchise<T> {
 //        System.out.println(ntable);
 //        System.out.println(ntable1);
         System.out.println(crf.score());
+        System.out.println("---");
         for (int i = 0; i < 1000000; i++) {
             try {
                 crf.remove(cust[i],tables[i],i%10);
