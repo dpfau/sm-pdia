@@ -152,7 +152,6 @@ public class ChineseRestaurantFranchise<T> {
     }
     
     public double score() {
-        System.out.println(N[0]);
         double score = Gamma.logGamma(concentrations[0]) - Gamma.logGamma(concentrations[0] + N[0]);
         if (discounts[0] != 0) {
             score += dishes.size() * Math.log(discounts[0])
@@ -163,9 +162,8 @@ public class ChineseRestaurantFranchise<T> {
             score += dishes.size() * Math.log(concentrations[0]);
         }
         for (Object t: dishMap.keySet()) {
-            score += Gamma.logGamma(((ArrayList)dishMap.get(t)).size() - discounts[0]);
+            score += Gamma.logGamma(dishMap.get(t).size() - discounts[0]);
         }
-        
         for (int i = 0; i < numFranchise; i++) {
             int size = franchise[i].size();
             score += Gamma.logGamma(concentrations[i+1]) - Gamma.logGamma(concentrations[i+1] + N[i+1]);
@@ -187,7 +185,7 @@ public class ChineseRestaurantFranchise<T> {
     public double score(Customer<T>[] c, Table<T>[] t, int[] n) {
         assert(c.length == t.length);
         assert(c.length == n.length);
-        int[] M = new int[numFranchise+1];
+        int[] M = new int[numFranchise];
         HashMap<T,Integer>       newDishes = new HashMap();
         HashMap<Integer,Integer> oldDishes = new HashMap();
         
@@ -198,63 +196,74 @@ public class ChineseRestaurantFranchise<T> {
             oldTables[i] = new HashMap();
         }
         for (int i = 0; i < c.length; i++) {
-            M[n[i]+1]++;
+            M[n[i]]++;
             int idx = franchise[n[i]].indexOf(t[i]);
-            if (idx != -1) {
+            if (idx != -1) { // new customer at existing table
                 incHash(oldTables[n[i]], idx);
-            } else {
+            } else { 
                 idx = dishes.indexOf(c[i].val);
-                if (idx != -1) {
-                    incHash(oldDishes, idx);
-                } else {
-                    if (newDishes.containsKey(c[i].val)) {
-                        if (!newTables[n[i]].containsKey(t[i])) {
+                if (idx != -1) { // new customer, new table, existing dish
+                    if (oldDishes.containsKey(idx)) { // not the first new table for this dish
+                        if (!newTables[n[i]].containsKey(t[i])) {  // the first customer seated at the new table with existing dish
+                            Integer ct = oldDishes.get(idx) + 1;
+                            oldDishes.put(idx, ct);
+                        }
+                    } else { // first new table for this dish
+                        oldDishes.put(idx, 1);
+                    }
+                    // incHash(oldDishes, idx2);
+                } else { // new table, new customer, new dish
+                    if (newDishes.containsKey(c[i].val)) {  // not the first new table with this new dish
+                        if (!newTables[n[i]].containsKey(t[i])) { // the first customer seated at the new table with new dish
                             Integer ct = newDishes.get(c[i].val) + 1;
                             newDishes.put(c[i].val, ct);
-                            M[0]++;
                         }
-                    } else {
+                    } else { // first new table with the new dish
                         newDishes.put(c[i].val, 1);
-                        M[0]++;
                     }
                 }
                 incHash(newTables[n[i]], t[i]);
             }
         }
         // Compute the actual score here.
-        System.out.println(M[0]);
-        double score = Gamma.logGamma(concentrations[0] + N[0]) - Gamma.logGamma(concentrations[0] + N[0] + M[0]);
+        int M0 = 0;
+        for (int i = 0; i < numFranchise; i++) {
+            M0 += newTables[i].size();
+        }
+        double score = Gamma.logGamma(concentrations[0] + N[0]) - Gamma.logGamma(concentrations[0] + N[0] + M0);
         if (discounts[0] != 0) {
             score += newDishes.size() * Math.log(discounts[0])
-                  +  Gamma.logGamma(concentrations[0] / discounts[0] + newDishes.size())
-                  -  Gamma.logGamma(concentrations[0] / discounts[0] + dishes.size());            
+                  +  Gamma.logGamma(concentrations[0] / discounts[0] + dishes.size() + newDishes.size())
+                  -  Gamma.logGamma(concentrations[0] / discounts[0] + dishes.size())
+                  -  newDishes.size() * Gamma.logGamma(1 - discounts[0]);
         } else {
             score += newDishes.size() * Math.log(concentrations[0]);
         }
         for(T dish : newDishes.keySet()) {
-            score += Gamma.logGamma(newDishes.get(dish) - discounts[0]) 
-                   - Gamma.logGamma(1 - discounts[0]);
+            score += Gamma.logGamma(newDishes.get(dish) - discounts[0]);
         }
         for(Integer i: oldDishes.keySet()) {
-            score += Gamma.logGamma(oldDishes.get(i) - discounts[0]) 
-                   - Gamma.logGamma(dishMap.get(dishes.get(i)).size() - discounts[0]);
+            int foo = dishMap.get(dishes.get(i)).size();
+            score += Gamma.logGamma(foo + oldDishes.get(i) - discounts[0]) 
+                   - Gamma.logGamma(foo - discounts[0]);
         }
         for (int i = 0; i < numFranchise; i++) {
-            score += Gamma.logGamma(concentrations[i+1] + N[i+1]) - Gamma.logGamma(concentrations[i+1] + N[i+1] + M[i+1]);
+            score += Gamma.logGamma(concentrations[i+1] + N[i+1]) - Gamma.logGamma(concentrations[i+1] + N[i+1] + M[i]);
             if (discounts[i+1] != 0) {
-                score += newDishes.size() * Math.log(discounts[i+1])
-                      +  Gamma.logGamma(concentrations[i+1] / discounts[i+1] + newTables[i].size())
-                      -  Gamma.logGamma(concentrations[i+1] / discounts[i+1] + franchise[i].size());                  
+                score += newTables[i].size() * Math.log(discounts[i+1])
+                      +  Gamma.logGamma(concentrations[i+1] / discounts[i+1] + franchise[i].size() + newTables[i].size())
+                      -  Gamma.logGamma(concentrations[i+1] / discounts[i+1] + franchise[i].size())
+                      - newTables[i].size() * Gamma.logGamma(1 - discounts[i+1]);                  
             } else {
                 score += newTables[i].size() * Math.log(concentrations[i+1]);
             }
             for(Table<T> table: newTables[i].keySet()) {
-                score += Gamma.logGamma(newTables[i].get(table) - discounts[i+1])
-                       - Gamma.logGamma(1 - discounts[i+1]);
+                score += Gamma.logGamma(newTables[i].get(table) - discounts[i+1]);
             }
             for(Integer j: oldTables[i].keySet()) {
-                score += Gamma.logGamma(oldTables[i].get(j) - discounts[i+1]) 
-                       - Gamma.logGamma(franchise[i].get(j).size() - discounts[i+1]);
+                int foo = franchise[i].get(j).size();
+                score += Gamma.logGamma(foo + oldTables[i].get(j) - discounts[i+1]) 
+                       - Gamma.logGamma(foo - discounts[i+1]);
             }
         }
         return score;
@@ -271,10 +280,11 @@ public class ChineseRestaurantFranchise<T> {
     
     public static void main(String args[]) {
         ChineseRestaurantFranchise crf = new ChineseRestaurantFranchise<Float>(10, new Uniform());
-        Customer[] cust = new Customer[1000000];
-        int[] franch = new int[1000000];
-        Table<Float>[] tables = new Table[1000000]; 
-        for(int i = 0; i < 1000000; i++) {
+        int N = 1000000;
+        Customer[] cust = new Customer[N];
+        int[] franch = new int[N];
+        Table<Float>[] tables = new Table[N]; 
+        for(int i = 0; i < N; i++) {
             cust[i] = new Customer();
             tables[i] = crf.sampleAndAdd(cust[i],i%10);
             franch[i] = i%10;
@@ -295,14 +305,21 @@ public class ChineseRestaurantFranchise<T> {
 //        System.out.println(ntable1);
         System.out.println(crf.score());
         System.out.println("---");
-        for (int i = 0; i < 1000000; i++) {
+        int M = 500000;
+        Customer[] cust2 = new Customer[M];
+        Table<Float>[] tables2 = new Table[M];
+        int[] franch2 = new int[M];
+        for (int i = 0; i < M; i++) {
             try {
+                cust2[i] = cust[i];
+                franch2[i] = i%10;
+                tables2[i] = tables[i];
                 crf.remove(cust[i],tables[i],i%10);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-        System.out.println(crf.score(cust,tables,franch));
+        System.out.println(crf.score()+ crf.score(cust2,tables2,franch2));
         
 //        ntable = 0;
 //        ntable1 = 0;
