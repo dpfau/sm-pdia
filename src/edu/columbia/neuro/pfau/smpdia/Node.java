@@ -14,8 +14,8 @@ import java.util.HashMap;
 public class Node<T> extends Customer{
     private HashMap<T,Node<T>> next;
     // Note that in the PDIA, we track this in two places: within the Node
-    //object itself, and the dish served at the table in the restaurant
-    //franchise that this Node is seated at.  When changing edges, we need to
+    // object itself, and the dish served at the table in the restaurant
+    // franchise that this Node is seated at.  When changing edges, we need to
     // be careful that these two are kept consistent.
 
     public Node() {

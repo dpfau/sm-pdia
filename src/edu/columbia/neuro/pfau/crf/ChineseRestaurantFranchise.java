@@ -4,8 +4,6 @@
  */
 package edu.columbia.neuro.pfau.crf;
 
-import edu.columbia.neuro.pfau.smpdia.Distribution;
-import edu.columbia.neuro.pfau.smpdia.Uniform;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
@@ -31,7 +29,7 @@ public class ChineseRestaurantFranchise<T> {
     public ArrayList<T> dishes;
     public HashMap<T,ArrayList<Table<T>>> dishMap; // Useful for tracking all tables serving the same dish
     
-    public ChineseRestaurantFranchise(int n, Distribution base) {
+    public ChineseRestaurantFranchise(int n, Distribution<T> base) {
         this.base = base;
         numFranchise = n;
         discounts = new float[n+1];
