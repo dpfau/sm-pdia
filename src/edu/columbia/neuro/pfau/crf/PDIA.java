@@ -21,14 +21,26 @@ public class PDIA {
         this.nSymbols = nSymbols;
         start = new Node(nSymbols);
         crf = new ChineseRestaurantFranchise(this.nSymbols, new NodeDist(this.nSymbols));
-        Node current;
-        Customer<Node> next;
         for (int i = 0; i < this.data.length; i++) {
-            System.out.println(i);
-            current = start;
             for (int j = 0; j < this.data[i].length; j++) {
                 int datum = this.data[i][j];
                 assert datum < 0 || datum >= this.nSymbols : "Data is out of range specified by nSymbols";
+            }
+        }
+    }
+    
+    public void run() {
+        start.count = new int[nSymbols];
+        for (Node n: crf.dishes) {
+            n.count = new int[nSymbols];
+        }
+        Node current;
+        Customer<Node> next;
+        for (int i = 0; i < this.data.length; i++) {
+            current = start;
+            for (int j = 0; j < this.data[i].length; j++) {
+                int datum = this.data[i][j];
+                current.count[datum]++;
                 next = current.next[datum];
                 if (next == null) {
                     next = new Customer<Node>();
@@ -37,7 +49,7 @@ public class PDIA {
                 }
                 current = next.val;
             }
-        }
+        }    
     }
     
     public static void main(String[] args) {
@@ -54,6 +66,7 @@ public class PDIA {
         }
         
         PDIA p = new PDIA(data, s);
+        p.run();
         System.out.println(p.crf.score());
         System.out.println(p.crf.dishes.size());
     }

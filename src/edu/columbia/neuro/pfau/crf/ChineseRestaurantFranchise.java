@@ -35,7 +35,7 @@ public class ChineseRestaurantFranchise<T> {
         discounts = new float[n+1];
         concentrations = new double[n+1];
         for (int i = 0; i < n+1; i++) {
-            discounts[i] = (float)0.9;
+            discounts[i] = (float)0.6;
             concentrations[i] = 1;
         }
         
