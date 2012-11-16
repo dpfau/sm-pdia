@@ -22,7 +22,6 @@ public class ChineseRestaurantFranchise<T> {
     public Distribution<T> base;
     private Random r = new Random();
     private UUID uuid;
-    private double[][] pdf; // For faster sampling, don't have to construct these on the fly
     private static final int BLOCKSIZE = 64;
     
     // The following data structures are two ways of pointing to the same ArrayList<Customer<T>> objects
@@ -36,7 +35,7 @@ public class ChineseRestaurantFranchise<T> {
         discounts = new float[n+1];
         concentrations = new double[n+1];
         for (int i = 0; i < n+1; i++) {
-            discounts[i] = (float)0.5;
+            discounts[i] = (float)0.9;
             concentrations[i] = 1;
         }
         
@@ -47,75 +46,13 @@ public class ChineseRestaurantFranchise<T> {
         dishes = new ArrayList();
         dishMap = new HashMap();
         N = new int[n+1];
-        pdf = new double[n+1][];
-        for (int i = 0; i < n+1; i++) {
-            pdf[i] = new double[BLOCKSIZE];
-        }
-    }
-    
-    private int discreteSample(double[] pdf, double cumSum) {
-        double samp = cumSum * r.nextFloat();
-        double cdf = 0.0;
-        for (int i = 0; i < pdf.length; i++) {
-            cdf += pdf[i];
-            if (samp < cdf) {
-                return i;
-            }
-        }
-        return pdf.length;
-    }
-    
-    private int discreteSample(int n) {
-        double samp = (concentrations[n] + N[n]) * r.nextFloat();
-        double cdf = 0.0;
-        int len;
-        if (n == 0) {
-            len = dishMap.size();
-        } else {
-            len = franchise[n-1].size();
-        }
-        for (int i = 0; i < len; i++) {
-            cdf += pdf[n][i];
-            if (samp < cdf) {
-                return i;
-            }
-        }
-        return len;        
-    }
-    
-    private void growPDF(int i) {
-        // If necessary, increase the size of pdf, and update with new entry
-        int len;
-        if (i == 0) {
-            len = dishMap.size();
-        } else {
-            len = franchise[i-1].size();
-        }
-        if (len == pdf[i].length) {
-            double[] foo = new double[pdf[i].length + BLOCKSIZE];
-            System.arraycopy(pdf[i], 0, foo, 0, len);
-            pdf[i] = foo;
-        }
-        if (len != 0) {
-            pdf[i][len] = pdf[i][len - 1] + discounts[i];
-            pdf[i][len - 1] = 1 - discounts[i];
-        } else {
-            pdf[i][0] = concentrations[i];
-        }
-        N[i] ++;
-    }    
+    }   
     
     public T sample(int n) {
-        // int samp = discreteSample(n+1);
         int i;
         double cdf = 0.0;
         double samp = (concentrations[n+1] + N[n+1]) * r.nextFloat();
         if (n == -1) {
-            // double pdf[] = new double[dishMap.size()];
-            // for (int i = 0; i < dishes.size(); i++) {
-            //     pdf[i] = dishMap.get(dishes.get(i)).size() - discounts[0];
-            // }
-            // int samp = discreteSample(pdf, concentrations[0] + N[0]);
             for (i = 0; i < dishes.size(); i++) {
                 cdf += dishMap.get(dishes.get(i)).size() - discounts[0];
                 if (cdf > samp) {
@@ -128,11 +65,6 @@ public class ChineseRestaurantFranchise<T> {
                 return dishes.get(i);
             }
         } else {
-            // double pdf[] = new double[franchise[n].size()];
-            // for(int i = 0; i < franchise[n].size(); i++) {
-            //    pdf[i] = franchise[n].get(i).size() - discounts[n+1];
-            //}
-            //int samp = discreteSample(pdf, concentrations[n+1] + N[n+1]);
             for (i = 0; i < franchise[n].size(); i++) {
                 cdf += franchise[n].get(i).size() - discounts[n+1];
                 if (cdf > samp) {
@@ -150,12 +82,6 @@ public class ChineseRestaurantFranchise<T> {
     // Sample lower-level restaurant
     public Table<T> sampleAndAdd(Customer<T> c, int n) {
         N[n+1]++;
-        //double pdf[] = new double[franchise[n].size()];
-        //for (int i = 0; i < franchise[n].size(); i++) {
-        //    pdf[i] = franchise[n].get(i).size() - discounts[n + 1];
-        //}
-        // int samp = discreteSample(pdf, concentrations[n + 1] + N[n + 1] - 1);
-        // int samp = discreteSample(n + 1);
         int i;
         double cdf = 0.0;
         double samp = (concentrations[n+1] + N[n+1] - 1) * r.nextFloat();
@@ -171,12 +97,10 @@ public class ChineseRestaurantFranchise<T> {
             c.val = sampleAndAdd(t);
             t.add(c);
             franchise[n].add(t);
-            //growPDF(n+1);
         } else {
             t = franchise[n].get(i);
             c.val = t.get(0).val;
             t.add(c);
-            //pdf[n+1][i]++;
         }
         return t;
     }
@@ -184,12 +108,6 @@ public class ChineseRestaurantFranchise<T> {
     // Sample top-level restaurant
     public T sampleAndAdd(Table<T> t) {
         N[0]++;
-        //double pdf[] = new double[dishMap.size()];
-        //for (int i = 0; i < dishes.size(); i++) {
-        //    pdf[i] = dishMap.get(dishes.get(i)).size() - discounts[0];
-        //}
-        //int samp = discreteSample(pdf, concentrations[0] + N[0] - 1);
-        //int samp = discreteSample(0);
         int i;
         double samp = (concentrations[0] + N[0] - 1) * r.nextFloat();
         double cdf = 0.0;
@@ -204,10 +122,8 @@ public class ChineseRestaurantFranchise<T> {
             sample = base.sample();
             dishes.add(sample);
             dishMap.put(sample, new ArrayList<Table<T>>());
-            //growPDF(0);
         } else {
             sample = dishes.get(i);
-            //pdf[0][i]++;
         }
         ArrayList<Table<T>> tables = dishMap.get(sample);
         tables.add(t);
@@ -224,7 +140,6 @@ public class ChineseRestaurantFranchise<T> {
             if (t.isEmpty()) {
                 N[0]--;
                 franchise[n].remove(t);
-                
                 ArrayList<Table<T>> tables = dishMap.get(c.val);
                 tables.remove(t);
                 if (tables.isEmpty()) {
@@ -295,7 +210,6 @@ public class ChineseRestaurantFranchise<T> {
                     } else { // first new table for this dish
                         oldDishes.put(idx, 1);
                     }
-                    // incHash(oldDishes, idx2);
                 } else { // new table, new customer, new dish
                     if (newDishes.containsKey(c[i].val)) {  // not the first new table with this new dish
                         if (!newTables[n[i]].containsKey(t[i])) { // the first customer seated at the new table with new dish
@@ -388,25 +302,22 @@ public class ChineseRestaurantFranchise<T> {
 //        System.out.println(ntable);
 //        System.out.println(ntable1);
         System.out.println(crf.score());
-        for (int i = 0; i < 11; i++) {
-            System.out.println(crf.N[i]);
-        }
         System.out.println("---");
-        int M = 500000;
-        Customer[] cust2 = new Customer[M];
-        Table<Float>[] tables2 = new Table[M];
-        int[] franch2 = new int[M];
-        for (int i = 0; i < M; i++) {
-            try {
-                cust2[i] = cust[i];
-                franch2[i] = i%10;
-                tables2[i] = tables[i];
-                crf.remove(cust[i],tables[i],i%10);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        System.out.println(crf.score()+ crf.score(cust2,tables2,franch2));
+//        int M = 500000;
+//        Customer[] cust2 = new Customer[M];
+//        Table<Float>[] tables2 = new Table[M];
+//        int[] franch2 = new int[M];
+//        for (int i = 0; i < M; i++) {
+//            try {
+//                cust2[i] = cust[i];
+//                franch2[i] = i%10;
+//                tables2[i] = tables[i];
+//                crf.remove(cust[i],tables[i],i%10);
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//            }
+//        }
+//        System.out.println(crf.score()+ crf.score(cust2,tables2,franch2));
         
 //        ntable = 0;
 //        ntable1 = 0;
