@@ -8,7 +8,8 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 /**
- *
+ * This class is pretty much a wrapper for an ArrayList of Customers because 
+ * I was getting weird issues comparing two pointers to the same ArrayList
  * @author pfau
  */
 public class Table<T> {

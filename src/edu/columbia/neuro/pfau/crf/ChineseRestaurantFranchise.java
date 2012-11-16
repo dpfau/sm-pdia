@@ -22,7 +22,8 @@ public class ChineseRestaurantFranchise<T> {
     public Distribution<T> base;
     private Random r = new Random();
     private UUID uuid;
-    // private double[][] pdf; // For faster sampling, don't have to construct these on the fly
+    private double[][] pdf; // For faster sampling, don't have to construct these on the fly
+    private static final int BLOCKSIZE = 64;
     
     // The following data structures are two ways of pointing to the same ArrayList<Customer<T>> objects
     public ArrayList<Table<T>>[] franchise; // Useful for tracking counts within a restaurant
@@ -35,7 +36,7 @@ public class ChineseRestaurantFranchise<T> {
         discounts = new float[n+1];
         concentrations = new double[n+1];
         for (int i = 0; i < n+1; i++) {
-            discounts[i] = (float)0.5;
+            discounts[i] = (float)0.9;
             concentrations[i] = 1;
         }
         
@@ -45,7 +46,11 @@ public class ChineseRestaurantFranchise<T> {
         }
         dishes = new ArrayList();
         dishMap = new HashMap();
-        N = new int[n+1]; 
+        N = new int[n+1];
+        pdf = new double[n+1][];
+        for (int i = 0; i < n+1; i++) {
+            pdf[i] = new double[BLOCKSIZE];
+        }
     }
     
     private int discreteSample(double[] pdf, double cumSum) {
@@ -60,24 +65,65 @@ public class ChineseRestaurantFranchise<T> {
         return pdf.length;
     }
     
-    public T sample(int n) {
-        if (n == -1) {
-            double pdf[] = new double[dishMap.size()];
-            for (int i = 0; i < dishes.size(); i++) {
-                pdf[i] = dishMap.get(dishes.get(i)).size() - discounts[0];
+    private int discreteSample(int n) {
+        double samp = (concentrations[n] + N[n]) * r.nextFloat();
+        double cdf = 0.0;
+        int len;
+        if (n == 0) {
+            len = dishMap.size();
+        } else {
+            len = franchise[n-1].size();
+        }
+        for (int i = 0; i < len; i++) {
+            cdf += pdf[n][i];
+            if (samp < cdf) {
+                return i;
             }
-            int samp = discreteSample(pdf, concentrations[0] + N[0]);
+        }
+        return len;        
+    }
+    
+    private void growPDF(int i) {
+        // If necessary, increase the size of pdf, and update with new entry
+        int len;
+        if (i == 0) {
+            len = dishMap.size();
+        } else {
+            len = franchise[i-1].size();
+        }
+        if (len == pdf[i].length) {
+            double[] foo = new double[pdf[i].length + BLOCKSIZE];
+            System.arraycopy(pdf[i], 0, foo, 0, len);
+            pdf[i] = foo;
+        }
+        if (len != 0) {
+            pdf[i][len] = pdf[i][len - 1] + discounts[i];
+            pdf[i][len - 1] = 1 - discounts[i];
+        } else {
+            pdf[i][0] = concentrations[i];
+        }
+        N[i] ++;
+    }    
+    
+    public T sample(int n) {
+        int samp = discreteSample(n+1);
+        if (n == -1) {
+            // double pdf[] = new double[dishMap.size()];
+            // for (int i = 0; i < dishes.size(); i++) {
+            //     pdf[i] = dishMap.get(dishes.get(i)).size() - discounts[0];
+            // }
+            // int samp = discreteSample(pdf, concentrations[0] + N[0]);
             if (samp == dishes.size()) {
                 return base.sample();
             } else {
                 return dishes.get(samp);
             }
         } else {
-            double pdf[] = new double[franchise[n].size()];
-            for(int i = 0; i < franchise[n].size(); i++) {
-                pdf[i] = franchise[n].get(i).size() - discounts[n+1];
-            }
-            int samp = discreteSample(pdf, concentrations[n+1] + N[n+1]);
+            // double pdf[] = new double[franchise[n].size()];
+            // for(int i = 0; i < franchise[n].size(); i++) {
+            //    pdf[i] = franchise[n].get(i).size() - discounts[n+1];
+            //}
+            //int samp = discreteSample(pdf, concentrations[n+1] + N[n+1]);
             if (samp == franchise[n].size()) {
                 return sample(0);
             } else {
@@ -88,41 +134,47 @@ public class ChineseRestaurantFranchise<T> {
     
     // Sample lower-level restaurant
     public Table<T> sampleAndAdd(Customer<T> c, int n) {
-        N[n + 1]++;
-        double pdf[] = new double[franchise[n].size()];
-        for (int i = 0; i < franchise[n].size(); i++) {
-            pdf[i] = franchise[n].get(i).size() - discounts[n + 1];
-        }
-        int samp = discreteSample(pdf, concentrations[n + 1] + N[n + 1] - 1);
+        // N[n + 1]++;
+        //double pdf[] = new double[franchise[n].size()];
+        //for (int i = 0; i < franchise[n].size(); i++) {
+        //    pdf[i] = franchise[n].get(i).size() - discounts[n + 1];
+        //}
+        // int samp = discreteSample(pdf, concentrations[n + 1] + N[n + 1] - 1);
+        int samp = discreteSample(n + 1);
         Table<T> t;
         if (samp == franchise[n].size()) {
             t = new Table<T>(UUID.randomUUID());
             c.val = sampleAndAdd(t);
             t.add(c);
             franchise[n].add(t);
+            growPDF(n+1);
         } else {
             t = franchise[n].get(samp);
             c.val = t.get(0).val;
             t.add(c);
+            pdf[n+1][samp]++;
         }
         return t;
     }
     
     // Sample top-level restaurant
     public T sampleAndAdd(Table<T> t) {
-        N[0]++;
-        double pdf[] = new double[dishMap.size()];
-        for (int i = 0; i < dishes.size(); i++) {
-            pdf[i] = dishMap.get(dishes.get(i)).size() - discounts[0];
-        }
-        int samp = discreteSample(pdf, concentrations[0] + N[0] - 1);
+        //N[0]++;
+        //double pdf[] = new double[dishMap.size()];
+        //for (int i = 0; i < dishes.size(); i++) {
+        //    pdf[i] = dishMap.get(dishes.get(i)).size() - discounts[0];
+        //}
+        //int samp = discreteSample(pdf, concentrations[0] + N[0] - 1);
+        int samp = discreteSample(0);
         T sample;
         if (samp == dishes.size()) {
             sample = base.sample();
             dishes.add(sample);
             dishMap.put(sample, new ArrayList<Table<T>>());
+            growPDF(0);
         } else {
             sample = dishes.get(samp);
+            pdf[0][samp]++;
         }
         ArrayList<Table<T>> tables = dishMap.get(sample);
         tables.add(t);

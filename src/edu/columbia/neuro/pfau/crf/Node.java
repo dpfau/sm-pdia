@@ -14,5 +14,6 @@ public class Node {
     
     public Node(int n) {
         next = new Customer[n];
+        count = new int[n];
     }
 }
