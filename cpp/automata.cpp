@@ -25,20 +25,29 @@ using namespace std;
 static const int alphalen = 27;
 char alphabet[] = "abcdefghijklmnopqrstuvwxyz ";
 
-struct loop {
-	Agedge_t * val;
-	loop * next;
-	//loop * last;
-}; // link in a circular linked list
+class Node;
+
+struct edge {
+	Node * tail;
+	Node * head;
+	int label;
+	edge * left;
+	edge * right;
+	Agedge_t * gedge; // Graphviz data structure. This means basically the entire graph structure is duplicated. Oh well.
+}; 
+// Edges are stored in two places: an array in the tail node and a circular linked list in the head node. 
+// This allows constant insertion and deletion into the head list both when manipulating a single edge and when
+// merging all the edges from a single node.
 
 class Node {
 	double weight[alphalen]; // unnormalized emission probabilities
 	double cumsum; // normalization factor
-	Node * next[alphalen]; // transitions
-	loop * back; // root of a circular linked list with pointers to all the edges that map into this Node
+
+	edge forward[alphalen]; // All the edges of which this node is the tail node. Of a known size so we use a fixed array.
+	edge * back; // Root of a circular linked list of all the edges of which this node is the tail.
+
 	Agraph_t * g; // pointer to top-level graph
-	Agnode_t * gnode; // graphviz node pointer
-	Agedge_t * edges[alphalen]; // makes things faster at the cost of higher memory, by storing edges instead of searching for them
+	Agnode_t * gnode; // graphviz data structure
 	bool blocked; // when recursively traversing the graph, eg in deleting or merging, 
 	              // indicates whether the particular function is in the process of being 
 	              // applied to this Node.
@@ -48,66 +57,84 @@ class Node {
 			gnode = agnode(G, name, 1);
 			blocked = false;
 			cumsum = alphalen;
+			back = 0;
 			for(int i = 0; i < alphalen; i++) {
 				weight[i] = 1.0;
+				forward[i].label = i;
+				forward[i].tail  = this;
+				forward[i].left  = &forward[i];
+				forward[i].right = &forward[i];
 			}
 			for(int i = 0; i < alphalen; i++) {
 				link(this, i, 1.0);
 			}
-			back = new loop;
-			back->val = edges[1];
-			loop * loop1 = back;
-			for(int i = 1; i < alphalen; i++) {
-				loop1->next = new loop;
-				loop1->next->val = edges[i];
-				// loop1->next->last = loop1;
-				loop1 = loop1->next;
-			}
-			loop1->next = back;
-			// back->last = loop1;
 		}
 
 		~Node() {
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
-				if (next[i] != 0 && !next[i]->blocked) {
-					delete next[i];
+				if (next(i) != 0 && !next(i)->blocked) {
+					delete next(i);
 				}
 			}
 			blocked = false;
 		}
 
+		Node * next(int i){
+			return forward[i].head;
+		}
+
 		// Note! This only unlinks the nodes. It does not delete them.
 		Node * unlink(int i) {
-			Node * n = next[i];
+			Node * n = next(i);
 			if (n != 0) {
-				next[i] = 0;
-				agdeledge(g, edges[i]);
+				if(forward[i].left == &forward[i]) { // If the tail node is only linked to by a single edge, then the backwards edge list has only a single element
+					n->back = 0; // dereference the linked list
+				} else {
+					forward[i].left->right = forward[i].right;
+					forward[i].right->left = forward[i].left;
+				}
+				agdeledge(g, forward[i].gedge);
+				forward[i].gedge = 0;
+				forward[i].head = 0;
 			}
 			return n;
 		}
 
 		Node * link(Node * n, int i, double d) {
 			Node * old = unlink(i);
-			cumsum += d - weight[i];
-			weight[i] = d;
-			next[i] = n;
-			edges[i] = agedge(g, gnode, n->gnode, &alphabet[i], 1);
+			if (d != 0.0) {
+				cumsum += d - weight[i];
+				weight[i] = d;
+			}
+			forward[i].head = n;
+			if (n->back == 0) { // If this is the first edge with n as its head...
+				n->back = &forward[i]; // ...then make this edge the root of the backward-facing edge linked list
+			} else {
+				forward[i].right = n->back->right;
+				forward[i].left  = n->back;
+				n->back->right   = &forward[i];
+			}
+			forward[i].gedge = agedge(g, gnode, n->gnode, &alphabet[i], 1);
 			return old;
 		}
 
 		void unblock() {
 			blocked = false;
 			for (int i = 0; i < alphalen; i++) {
-				if (next[i] != 0 && next[i]->blocked) {
-					next[i]->unblock();
+				if (next(i) != 0 && next(i)->blocked) {
+					next(i)->unblock();
 				}
 			}
 		}
 
 		void merge(Node * n) {
 			if (n!=this) {
-
+				for(int i = 0; i < alphalen; i++) {
+					if (n->next(i) == n) {
+						n->link(this, i, 0.0);
+					}
+				}
 			}
 		}
 };
