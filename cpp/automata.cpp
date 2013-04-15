@@ -18,27 +18,30 @@
 #define WITH_CGRAPH
 
 #include <gvc.h>
+#include <string>
 
 using namespace std;
 
 // Really writing this for speed instead of generality. That means fixing the alphabet at compile time.
-static const int alphalen = 27;
+static const int alphalen = 2;
 char alphabet[] = "abcdefghijklmnopqrstuvwxyz ";
 
 class Node;
 
-struct edge {
+struct Edge {
 	Node * tail;
 	Node * head;
 	int label;
-	edge * left;
-	edge * right;
+	double weight;
+	Edge * left;
+	Edge * right;
 	Agedge_t * gedge; // Graphviz data structure. This means basically the entire graph structure is duplicated. Oh well.
-	edge() {
+	Edge() {
 		head = 0;
 		left = this;
 		right = this;
 		gedge = 0;
+		weight = 1.0;
 	}
 }; 
 // Edges are stored in two places: an array in the tail node and a circular linked list in the head node. 
@@ -46,26 +49,26 @@ struct edge {
 // merging all the edges from a single node.
 
 class Node {
-	double weight[alphalen]; // unnormalized emission probabilities
 	double cumsum; // normalization factor
 
-	edge forward[alphalen]; // All the edges of which this node is the tail node. Of a known size so we use a fixed array.
-	edge * back; // Root of a circular linked list of all the edges of which this node is the tail.
+	Edge forward[alphalen]; // All the edges of which this node is the tail node. Of a known size so we use a fixed array.
+	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail.
 
 	Agraph_t * g; // pointer to top-level graph
-	Agnode_t * gnode; // graphviz data structure
 	bool blocked; // when recursively traversing the graph, eg in deleting or merging, 
 	              // indicates whether the particular function is in the process of being 
 	              // applied to this Node.
 	public:
-		Node(char * name, Agraph_t *G) {
+		char * name;
+		Agnode_t * gnode; // graphviz data structure
+		Node(char * c, Agraph_t *G) {
 			g = G;
+			name = c;
 			gnode = agnode(G, name, 1);
 			blocked = false;
 			cumsum = alphalen;
 			back = 0;
 			for(int i = 0; i < alphalen; i++) {
-				weight[i] = 1.0;
 				forward[i].tail  = this;
 				forward[i].label = i;
 			}
@@ -84,8 +87,12 @@ class Node {
 			blocked = false;
 		}
 
-		Node * next(int i){
+		Node * next(int i) {
 			return forward[i].head;
+		}
+
+		double weight(int i) {
+			return forward[i].weight;
 		}
 
 		// Note! This only unlinks the nodes. It does not delete them.
@@ -108,8 +115,8 @@ class Node {
 		Node * link(Node * n, int i, double d) {
 			Node * old = unlink(i);
 			if (d != 0.0) {
-				cumsum += d - weight[i];
-				weight[i] = d;
+				cumsum += d - weight(i);
+				forward[i].weight = d;
 			}
 			forward[i].head = n;
 			if (n->back == 0) { // If this is the first edge with n as its head...
@@ -133,13 +140,28 @@ class Node {
 		}
 
 		void merge(Node * n) {
-			if (n!=this) {
-				for(int i = 0; i < alphalen; i++) {
-					if (n->next(i) == n) {
-						n->link(this, i, 0.0);
+			if (n != this) {
+				while (n->back != 0) { // unlink the incoming edges from n until there are none left
+					link(n->back->tail, n->back->label, 0.0);
+				}
+				for (int i = 0; i < alphalen; i++) {
+					if (next(i) != 0 && n->next(i) != 0) { // if there's a conflict between edges 
+						next(i)->merge(n->next(i));
 					}
 				}
+				agdelnode(g, n->gnode);
 			}
+		}
+
+		Node * split(Edge ** ptr_backward, int num_backward, char* name) {
+			Node * node = new Node(name, g); 
+			for(int i = 0; i < num_backward; i++) {
+				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, 0.0);
+			}
+			for(int i = 0; i < alphalen; i++) {
+				node->link(next(i), i, weight(i));
+			}
+			return node;
 		}
 };
 
@@ -147,10 +169,12 @@ class Automata {
 	Agraph_t * G; // graphviz graph
 	GVC_t * gvc; // graphviz context
 	public:
+		Node * start;
 		Automata (char* fname) {
 			G = agopen(fname, Agdirected, 0);
 			gvc = gvContext();
-			Node root("Start", G);
+			start = new Node("_", G);
+			agsafeset(start->gnode, "shape", "doublecircle", "ellipse"); // Indicate the root node with a double circle
 		}
 
 		~Automata () {
@@ -163,9 +187,14 @@ class Automata {
 		double run(int ** data);
 
 		void viz(char * gname) {
-			gvLayout (gvc, G, "sfdp");
+			gvLayout (gvc, G, "dot");
 			// drawGraph (G);
 			gvFreeLayout(gvc, G); 
+		}
+
+		Node * create_node(Node * root, int label) {
+			Node * n = new Node(root->name + alphabet[label], G);
+			root->link(n, label, 0.0);
 		}
 };
 
@@ -179,5 +208,7 @@ int main(int argc, char ** argv) {
 	char name[] = "foo";
 	Automata * foo;
 	foo = new Automata (name);
+	foo->create_node(foo->start, 0);
+	foo->create_node(foo->start, 1);
 	delete foo;
 }
