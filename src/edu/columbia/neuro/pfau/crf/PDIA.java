@@ -45,11 +45,36 @@ public class PDIA {
                 if (next == null) {
                     next = new Customer<Node>();
                     current.next[datum] = next;
-                    crf.sampleAndAdd(next, datum);
+                    current.tables[datum] = crf.sampleAndAdd(next, datum);
                 }
+                next.val.back.put(current, datum);
                 current = next.val;
             }
         }    
+    }
+    
+    public void merge(Node a, Node b) {
+        assert crf.dishes.contains(a) : "Node not found in PDIA";
+        assert crf.dishes.contains(b) : "Node not found in PDIA";
+        for (int i = 0; i < nSymbols; i++) {
+            a.count[i] += b.count[i];
+            if (a.next[i] == null) {
+                a.next[i] = b.next[i];
+            } else {
+                if (b.next[i] != null) {
+                    if (crf.r.nextBoolean()) {
+                        merge(b.next[i].val, a.next[i].val);
+                    } else {
+                        merge(a.next[i].val, b.next[i].val);
+                    }
+                }
+            }
+        }
+    }
+    
+    public void split(Node a, Node b) {
+        assert crf.dishes.contains(a)  : "Node not found in PDIA";
+        assert !crf.dishes.contains(b) : "Cannot split into an existing node";
     }
     
     public static void main(String[] args) {
@@ -69,5 +94,20 @@ public class PDIA {
         p.run();
         System.out.println(p.crf.score());
         System.out.println(p.crf.dishes.size());
+        p.run();
+        p.crf.score();
+        System.out.println("foo");
+        p.run();
+        p.crf.score();
+        System.out.println("foo");
+        p.run();
+        p.crf.score();
+        System.out.println("foo");
+        p.run();
+        p.crf.score();
+        System.out.println("foo");
+        p.run();
+        p.crf.score();
+        System.out.println("foo");
     }
 }

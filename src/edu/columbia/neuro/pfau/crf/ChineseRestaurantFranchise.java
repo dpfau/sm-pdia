@@ -20,9 +20,7 @@ public class ChineseRestaurantFranchise<T> {
     public double[] concentrations;
     public int[] N; // Number of customers in each restaurant
     public Distribution<T> base;
-    private Random r = new Random();
-    private UUID uuid;
-    private static final int BLOCKSIZE = 64;
+    public Random r = new Random();
     
     // The following data structures are two ways of pointing to the same ArrayList<Customer<T>> objects
     public ArrayList<Table<T>>[] franchise; // Useful for tracking counts within a restaurant
