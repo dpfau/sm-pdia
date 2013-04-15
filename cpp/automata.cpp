@@ -60,10 +60,12 @@ class Node {
 			back = 0;
 			for(int i = 0; i < alphalen; i++) {
 				weight[i] = 1.0;
-				forward[i].label = i;
 				forward[i].tail  = this;
+				forward[i].head  = 0;
+				forward[i].label = i;
 				forward[i].left  = &forward[i];
 				forward[i].right = &forward[i];
+				forward[i].gedge = 0;
 			}
 			for(int i = 0; i < alphalen; i++) {
 				link(this, i, 1.0);
