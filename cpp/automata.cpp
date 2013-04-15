@@ -34,6 +34,12 @@ struct edge {
 	edge * left;
 	edge * right;
 	Agedge_t * gedge; // Graphviz data structure. This means basically the entire graph structure is duplicated. Oh well.
+	edge() {
+		head = 0;
+		left = this;
+		right = this;
+		gedge = 0;
+	}
 }; 
 // Edges are stored in two places: an array in the tail node and a circular linked list in the head node. 
 // This allows constant insertion and deletion into the head list both when manipulating a single edge and when
@@ -61,11 +67,7 @@ class Node {
 			for(int i = 0; i < alphalen; i++) {
 				weight[i] = 1.0;
 				forward[i].tail  = this;
-				forward[i].head  = 0;
 				forward[i].label = i;
-				forward[i].left  = &forward[i];
-				forward[i].right = &forward[i];
-				forward[i].gedge = 0;
 			}
 			for(int i = 0; i < alphalen; i++) {
 				link(this, i, 1.0);
