@@ -15,9 +15,6 @@
 * David Pfau, 2013
 */
 
-//#define WITH_CGRAPH
-
-//#include <gvc.h>
 #include <string>
 #include <stdio.h>
 #include <iostream>
@@ -37,12 +34,10 @@ struct Edge {
 	double weight;
 	Edge * left;
 	Edge * right;
-	// Agedge_t * gedge; // Graphviz data structure. This means basically the entire graph structure is duplicated. Oh well.
 	Edge() {
 		head = 0;
 		left = this;
 		right = this;
-		// gedge = 0;
 		weight = 1.0;
 	}
 }; 
@@ -56,17 +51,13 @@ class Node {
 	Edge forward[alphalen]; // All the edges of which this node is the tail node. Of a known size so we use a fixed array.
 	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail.
 
-	// Agraph_t * g; // pointer to top-level graph
 	bool blocked; // when recursively traversing the graph, eg in deleting or merging, 
 	              // indicates whether the particular function is in the process of being 
 	              // applied to this Node.
 	public:
 		char * name;
-		// Agnode_t * gnode; // graphviz data structure
 		Node(char * c) {
-			// g = G;
 			name = c;
-			// gnode = agnode(G, name, 1);
 			blocked = false;
 			cumsum = alphalen;
 			back = 0;
@@ -107,8 +98,6 @@ class Node {
 					forward[i].left->right = forward[i].right;
 					forward[i].right->left = forward[i].left;
 				}
-				// agdeledge(g, forward[i].gedge);
-				// forward[i].gedge = 0;
 				forward[i].head = 0;
 			}
 			return n;
@@ -128,7 +117,6 @@ class Node {
 				forward[i].left  = n->back;
 				n->back->right   = &forward[i];
 			}
-			// forward[i].gedge = agedge(g, gnode, n->gnode, &alphabet[i], 1);
 			return old;
 		}
 
@@ -151,7 +139,6 @@ class Node {
 						next(i)->merge(n->next(i));
 					}
 				}
-				// agdelnode(g, n->gnode);
 			}
 		}
 
@@ -188,20 +175,13 @@ class Node {
 };
 
 class Automata {
-	// Agraph_t * G; // graphviz graph
-	// GVC_t * gvc; // graphviz context
 	public:
 		Node * start;
 		Automata (char* fname) {
-			// G = agopen(fname, Agdirected, 0);
-			// gvc = gvContext();
 			start = new Node("_");
-			// agsafeset(start->gnode, "shape", "doublecircle", "ellipse"); // Indicate the root node with a double circle
 		}
 
 		~Automata () {
-			// agclose(G); 
-			// gvFreeContext(gvc);
 		}
 
 		void split(Node*);
@@ -227,11 +207,6 @@ class Automata {
 			} else {
 				return -1;
 			}
-			/*
-			gvLayout(gvc, G, "dot");
-			gvRenderFilename(gvc, G, "eps", filename);
-			gvFreeLayout(gvc, G); 
-			*/
 		}
 
 		Node * create_node(Node * root, int label) {
