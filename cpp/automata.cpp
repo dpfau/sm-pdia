@@ -65,9 +65,9 @@ class Node {
 				forward[i].tail  = this;
 				forward[i].label = i;
 			}
-			for(int i = 0; i < alphalen; i++) {
-				link(this, i, 1.0);
-			}
+			//for(int i = 0; i < alphalen; i++) {
+			//	link(this, i, 1.0);
+			//}
 		}
 
 		~Node() {
@@ -129,16 +129,26 @@ class Node {
 			}
 		}
 
+		Node * create_node(int label, char * name) {
+			Node * n = new Node(name);
+			link(n, label, 0.0);
+			return n;
+		}
+
 		void merge(Node * n) {
 			if (n != this) {
 				while (n->back != 0) { // unlink the incoming edges from n until there are none left
-					link(n->back->tail, n->back->label, 0.0);
+					n->back->tail->link(this, n->back->label, 0.0);
 				}
 				for (int i = 0; i < alphalen; i++) {
-					if (next(i) != 0 && n->next(i) != 0) { // if there's a conflict between edges 
-						next(i)->merge(n->next(i));
+					if (n->next(i) != 0) { 
+						if (next(i) != 0 ) { // if there's a conflict between edges 
+							next(i)->merge(n->next(i));
+						}
+						forward[i].head = n->next(i);
 					}
 				}
+				//delete n;
 			}
 		}
 
@@ -169,7 +179,6 @@ class Node {
 					}
 				}
 			}
-			blocked = false;
 		}
 };
 
@@ -199,20 +208,13 @@ class Automata {
 				char * header = "digraph finite_state_machine {\n\trankdir=LR;\n\tsize=\"8,5\"\n\tnode [shape = doublecircle]; 0;\n\tnode [shape = circle];\n";
 				fwrite(header, sizeof(char), strlen(header), fout);
 				start->write_gv(fout);
+				start->unblock();
 				fwrite("}\n", sizeof(char), 2, fout);
 				fclose(fout);
 				return 0;
 			} else {
 				return -1;
 			}
-		}
-
-		Node * create_node(Node * root, int label) {
-			char * name = new char[strlen(root->name)+1];
-			strcpy(name, root->name);
-			strncat(name, &alphabet[label], 1);
-			Node * n = new Node(name);
-			root->link(n, label, 0.0);
 		}
 };
 
@@ -226,8 +228,14 @@ int main(int argc, char ** argv) {
 	char name[] = "foo";
 	Automata * foo;
 	foo = new Automata (name);
-	foo->create_node(foo->start, 0);
-	foo->create_node(foo->start, 1);
-	foo->write_gv("demo");
+	Node * n1 = foo->start->create_node(0, "1");
+	Node * n2 = foo->start->create_node(1, "2");
+	Node * n3 = n1->create_node(0, "3");
+	Node * n4 = n2->create_node(0, "4");
+	//Node * n5 = n3->create_node(1, "5");
+	n4->link(n2, 1, 0.0);
+	foo->write_gv(argv[1]);
+	n1->merge(n2);
+	foo->write_gv(argv[2]);
 	delete foo;
 }
