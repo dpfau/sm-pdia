@@ -15,11 +15,12 @@
 * David Pfau, 2013
 */
 
-#define WITH_CGRAPH
+//#define WITH_CGRAPH
 
-#include <gvc.h>
+//#include <gvc.h>
 #include <string>
 #include <stdio.h>
+#include <iostream>
 
 using namespace std;
 
@@ -214,12 +215,12 @@ class Automata {
 			char * filename = new char[strlen(fname) + 3];
 			strcpy(filename, fname);
 			strcat(filename, ".gv");
-			FILE * fout = fopen(fname,"w");
+			FILE * fout = fopen(filename,"w");
 			if (fout != 0) {
 				char * header = "digraph finite_state_machine {\n\trankdir=LR;\n\tsize=\"8,5\"\n\tnode [shape = doublecircle]; _;\n\tnode [shape = circle];\n";
 				fwrite(header, sizeof(char), strlen(header), fout);
 				start->write_gv(fout);
-				fwrite("}", sizeof(char), 1, fout);
+				fwrite("}\n", sizeof(char), 2, fout);
 				start->write_gv(fout);
 				fclose(fout);
 				return 0;
@@ -254,6 +255,6 @@ int main(int argc, char ** argv) {
 	foo = new Automata (name);
 	//foo->create_node(foo->start, 0);
 	//foo->create_node(foo->start, 1);
-	foo->write_gv("test");
+	cout << foo->write_gv("demo") << "\n";
 	delete foo;
 }
