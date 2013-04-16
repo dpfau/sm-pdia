@@ -19,6 +19,7 @@
 
 #include <gvc.h>
 #include <string>
+#include <stdio.h>
 
 using namespace std;
 
@@ -35,12 +36,12 @@ struct Edge {
 	double weight;
 	Edge * left;
 	Edge * right;
-	Agedge_t * gedge; // Graphviz data structure. This means basically the entire graph structure is duplicated. Oh well.
+	// Agedge_t * gedge; // Graphviz data structure. This means basically the entire graph structure is duplicated. Oh well.
 	Edge() {
 		head = 0;
 		left = this;
 		right = this;
-		gedge = 0;
+		// gedge = 0;
 		weight = 1.0;
 	}
 }; 
@@ -54,17 +55,17 @@ class Node {
 	Edge forward[alphalen]; // All the edges of which this node is the tail node. Of a known size so we use a fixed array.
 	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail.
 
-	Agraph_t * g; // pointer to top-level graph
+	// Agraph_t * g; // pointer to top-level graph
 	bool blocked; // when recursively traversing the graph, eg in deleting or merging, 
 	              // indicates whether the particular function is in the process of being 
 	              // applied to this Node.
 	public:
 		char * name;
-		Agnode_t * gnode; // graphviz data structure
-		Node(char * c, Agraph_t *G) {
-			g = G;
+		// Agnode_t * gnode; // graphviz data structure
+		Node(char * c) {
+			// g = G;
 			name = c;
-			gnode = agnode(G, name, 1);
+			// gnode = agnode(G, name, 1);
 			blocked = false;
 			cumsum = alphalen;
 			back = 0;
@@ -105,8 +106,8 @@ class Node {
 					forward[i].left->right = forward[i].right;
 					forward[i].right->left = forward[i].left;
 				}
-				agdeledge(g, forward[i].gedge);
-				forward[i].gedge = 0;
+				// agdeledge(g, forward[i].gedge);
+				// forward[i].gedge = 0;
 				forward[i].head = 0;
 			}
 			return n;
@@ -115,7 +116,7 @@ class Node {
 		Node * link(Node * n, int i, double d) {
 			Node * old = unlink(i);
 			if (d != 0.0) {
-				cumsum += d - weight(i);
+				cumsum += d - forward[i].weight;
 				forward[i].weight = d;
 			}
 			forward[i].head = n;
@@ -126,7 +127,7 @@ class Node {
 				forward[i].left  = n->back;
 				n->back->right   = &forward[i];
 			}
-			forward[i].gedge = agedge(g, gnode, n->gnode, &alphabet[i], 1);
+			// forward[i].gedge = agedge(g, gnode, n->gnode, &alphabet[i], 1);
 			return old;
 		}
 
@@ -149,12 +150,12 @@ class Node {
 						next(i)->merge(n->next(i));
 					}
 				}
-				agdelnode(g, n->gnode);
+				// agdelnode(g, n->gnode);
 			}
 		}
 
 		Node * split(Edge ** ptr_backward, int num_backward, char* name) {
-			Node * node = new Node(name, g); 
+			Node * node = new Node(name); 
 			for(int i = 0; i < num_backward; i++) {
 				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, 0.0);
 			}
@@ -163,37 +164,80 @@ class Node {
 			}
 			return node;
 		}
+
+		void write_gv(FILE * f) {
+			blocked = true;
+			for (int i = 0; i < alphalen; i++) {
+				if (next(i) != 0) {
+					fwrite("\t",            sizeof(char), 1,                     f);
+					fwrite(name,            sizeof(char), strlen(name),          f);
+					fwrite(" -> ", 	        sizeof(char), 4,                     f);
+					fwrite(next(i)->name,   sizeof(char), strlen(next(i)->name), f);
+					fwrite("\n",            sizeof(char), 1,                     f);
+					fwrite(" [ label = \"", sizeof(char), 12,                    f);
+					fwrite(&alphabet[i],    sizeof(char), 1,                     f);
+					fwrite("\" ]\n",        sizeof(char), 1,                     f);
+					if (!next(i)->blocked) {
+						next(i)->write_gv(f);
+					}
+				}
+			}
+			blocked = false;
+		}
 };
 
 class Automata {
-	Agraph_t * G; // graphviz graph
-	GVC_t * gvc; // graphviz context
+	// Agraph_t * G; // graphviz graph
+	// GVC_t * gvc; // graphviz context
 	public:
 		Node * start;
 		Automata (char* fname) {
-			G = agopen(fname, Agdirected, 0);
-			gvc = gvContext();
-			start = new Node("_", G);
-			agsafeset(start->gnode, "shape", "doublecircle", "ellipse"); // Indicate the root node with a double circle
+			// G = agopen(fname, Agdirected, 0);
+			// gvc = gvContext();
+			start = new Node("_");
+			// agsafeset(start->gnode, "shape", "doublecircle", "ellipse"); // Indicate the root node with a double circle
 		}
 
 		~Automata () {
-			agclose(G); 
-			gvFreeContext(gvc);
+			// agclose(G); 
+			// gvFreeContext(gvc);
 		}
 
 		void split(Node*);
 		
 		double run(int ** data);
 
-		void viz(char * gname) {
-			gvLayout (gvc, G, "dot");
-			// drawGraph (G);
+		int write_gv(char * fname) {
+			// Tried using graphviz-as-a-library but boy what a headache. 
+			// Just going to write things to a .gv file instead.
+
+			char * filename = new char[strlen(fname) + 3];
+			strcpy(filename, fname);
+			strcat(filename, ".gv");
+			FILE * fout = fopen(fname,"w");
+			if (fout != 0) {
+				char * header = "digraph finite_state_machine {\n\trankdir=LR;\n\tsize=\"8,5\"\n\tnode [shape = doublecircle]; _;\n\tnode [shape = circle];\n";
+				fwrite(header, sizeof(char), strlen(header), fout);
+				start->write_gv(fout);
+				fwrite("}", sizeof(char), 1, fout);
+				start->write_gv(fout);
+				fclose(fout);
+				return 0;
+			} else {
+				return -1;
+			}
+			/*
+			gvLayout(gvc, G, "dot");
+			gvRenderFilename(gvc, G, "eps", filename);
 			gvFreeLayout(gvc, G); 
+			*/
 		}
 
 		Node * create_node(Node * root, int label) {
-			Node * n = new Node(root->name + alphabet[label], G);
+			char * name = new char[strlen(root->name)+1];
+			strcpy(name, root->name);
+			strcat(name, &alphabet[label]);
+			Node * n = new Node(name);
 			root->link(n, label, 0.0);
 		}
 };
@@ -208,7 +252,8 @@ int main(int argc, char ** argv) {
 	char name[] = "foo";
 	Automata * foo;
 	foo = new Automata (name);
-	foo->create_node(foo->start, 0);
-	foo->create_node(foo->start, 1);
+	//foo->create_node(foo->start, 0);
+	//foo->create_node(foo->start, 1);
+	foo->write_gv("test");
 	delete foo;
 }
