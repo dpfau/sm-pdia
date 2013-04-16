@@ -161,10 +161,9 @@ class Node {
 					fwrite(name,            sizeof(char), strlen(name),          f);
 					fwrite(" -> ", 	        sizeof(char), 4,                     f);
 					fwrite(next(i)->name,   sizeof(char), strlen(next(i)->name), f);
-					fwrite("\n",            sizeof(char), 1,                     f);
 					fwrite(" [ label = \"", sizeof(char), 12,                    f);
 					fwrite(&alphabet[i],    sizeof(char), 1,                     f);
-					fwrite("\" ]\n",        sizeof(char), 1,                     f);
+					fwrite("\" ];\n",       sizeof(char), 5,                     f);
 					if (!next(i)->blocked) {
 						next(i)->write_gv(f);
 					}
@@ -178,7 +177,7 @@ class Automata {
 	public:
 		Node * start;
 		Automata (char* fname) {
-			start = new Node("_");
+			start = new Node("0");
 		}
 
 		~Automata () {
@@ -197,11 +196,10 @@ class Automata {
 			strcat(filename, ".gv");
 			FILE * fout = fopen(filename,"w");
 			if (fout != 0) {
-				char * header = "digraph finite_state_machine {\n\trankdir=LR;\n\tsize=\"8,5\"\n\tnode [shape = doublecircle]; _;\n\tnode [shape = circle];\n";
+				char * header = "digraph finite_state_machine {\n\trankdir=LR;\n\tsize=\"8,5\"\n\tnode [shape = doublecircle]; 0;\n\tnode [shape = circle];\n";
 				fwrite(header, sizeof(char), strlen(header), fout);
 				start->write_gv(fout);
 				fwrite("}\n", sizeof(char), 2, fout);
-				start->write_gv(fout);
 				fclose(fout);
 				return 0;
 			} else {
@@ -212,7 +210,7 @@ class Automata {
 		Node * create_node(Node * root, int label) {
 			char * name = new char[strlen(root->name)+1];
 			strcpy(name, root->name);
-			strcat(name, &alphabet[label]);
+			strncat(name, &alphabet[label], 1);
 			Node * n = new Node(name);
 			root->link(n, label, 0.0);
 		}
@@ -228,8 +226,8 @@ int main(int argc, char ** argv) {
 	char name[] = "foo";
 	Automata * foo;
 	foo = new Automata (name);
-	//foo->create_node(foo->start, 0);
-	//foo->create_node(foo->start, 1);
-	cout << foo->write_gv("demo") << "\n";
+	foo->create_node(foo->start, 0);
+	foo->create_node(foo->start, 1);
+	foo->write_gv("demo");
 	delete foo;
 }
