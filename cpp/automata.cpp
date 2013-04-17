@@ -65,9 +65,6 @@ class Node {
 				forward[i].tail  = this;
 				forward[i].label = i;
 			}
-			//for(int i = 0; i < alphalen; i++) {
-			//	link(this, i, 1.0);
-			//}
 		}
 
 		~Node() {
@@ -77,7 +74,6 @@ class Node {
 					delete next(i);
 				}
 			}
-			blocked = false;
 		}
 
 		Node * next(int i) {
@@ -97,6 +93,9 @@ class Node {
 				} else {
 					forward[i].left->right = forward[i].right;
 					forward[i].right->left = forward[i].left;
+					if (n->back == &forward[i]) {
+						n->back = forward[i].left;
+					}
 				}
 				forward[i].head = 0;
 			}
@@ -113,9 +112,10 @@ class Node {
 			if (n->back == 0) { // If this is the first edge with n as its head...
 				n->back = &forward[i]; // ...then make this edge the root of the backward-facing edge linked list
 			} else {
-				forward[i].right = n->back->right;
-				forward[i].left  = n->back;
-				n->back->right   = &forward[i];
+				forward[i].right     = n->back->right;
+				forward[i].left      = n->back;
+				n->back->right->left = &forward[i];
+				n->back->right       = &forward[i];
 			}
 			return old;
 		}
@@ -144,8 +144,9 @@ class Node {
 					if (n->next(i) != 0) { 
 						if (next(i) != 0 ) { // if there's a conflict between edges 
 							next(i)->merge(n->next(i));
+						} else {
+							forward[i].head = n->next(i);
 						}
-						forward[i].head = n->next(i);
 					}
 				}
 				//delete n;
@@ -187,9 +188,13 @@ class Automata {
 		Node * start;
 		Automata (char* fname) {
 			start = new Node("0");
+			for (int i = 0; i < alphalen; i++) {
+				start->link(start, i, 0.0);
+			}
 		}
 
 		~Automata () {
+			delete start;
 		}
 
 		void split(Node*);
@@ -197,9 +202,7 @@ class Automata {
 		double run(int ** data);
 
 		int write_gv(char * fname) {
-			// Tried using graphviz-as-a-library but boy what a headache. 
-			// Just going to write things to a .gv file instead.
-
+			// Write the graph to a .gv file
 			char * filename = new char[strlen(fname) + 3];
 			strcpy(filename, fname);
 			strcat(filename, ".gv");
@@ -230,10 +233,12 @@ int main(int argc, char ** argv) {
 	foo = new Automata (name);
 	Node * n1 = foo->start->create_node(0, "1");
 	Node * n2 = foo->start->create_node(1, "2");
+	n2->link(n1, 1, 0.0);
 	Node * n3 = n1->create_node(0, "3");
 	Node * n4 = n2->create_node(0, "4");
-	//Node * n5 = n3->create_node(1, "5");
+	Node * n5 = n3->create_node(1, "5");
 	n4->link(n2, 1, 0.0);
+	n3->link(foo->start, 0, 0.0);
 	foo->write_gv(argv[1]);
 	n1->merge(n2);
 	foo->write_gv(argv[2]);
