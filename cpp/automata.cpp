@@ -18,12 +18,15 @@
 #include <string>
 #include <stdio.h>
 #include <iostream>
+#include <list>
+#include <map>
 
 using namespace std;
 
 // Really writing this for speed instead of generality. That means fixing the alphabet at compile time.
 static const int alphalen = 2;
 char alphabet[] = "abcdefghijklmnopqrstuvwxyz ";
+map<char,int> alphamap;
 
 class Node;
 
@@ -32,6 +35,8 @@ struct Edge {
 	Node * head;
 	int label;
 	double weight;
+	int count;
+	list<void *> idx; // list of all the elements 
 	Edge * left;
 	Edge * right;
 	Edge() {
@@ -39,6 +44,7 @@ struct Edge {
 		left = this;
 		right = this;
 		weight = 1.0;
+		count = 0;
 	}
 }; 
 // Edges are stored in two places: an array in the tail node and a circular linked list in the head node. 
@@ -69,6 +75,7 @@ class Node {
 
 		~Node() {
 			blocked = true;
+			cout << "Deleting " << name << "\n";
 			for (int i = 0; i < alphalen; i++) {
 				if (next(i) != 0 && !next(i)->blocked) {
 					delete next(i);
@@ -78,6 +85,24 @@ class Node {
 
 		Node * next(int i) {
 			return forward[i].head;
+		}
+
+		void clear() {
+			blocked = true;
+			for (int i = 0; i < alphalen; i++) {
+				forward[i].count = 0;
+				forward[i].idx.clear();
+				if (!next(i)->blocked) {
+					next(i)->clear();
+				}
+			}
+		}
+
+		void update(char * c, int i, bool b) {
+			forward[i].count++;
+			if (b) {
+				forward[i].idx.push_back(c);
+			}
 		}
 
 		double weight(int i) {
@@ -142,6 +167,8 @@ class Node {
 				}
 				for (int i = 0; i < alphalen; i++) {
 					if (n->next(i) != 0) { 
+						forward[i].count += n->forward[i].count;
+						forward[i].idx.splice(forward[i].idx.end(), n->forward[i].idx);
 						if (next(i) != 0 ) { // if there's a conflict between edges 
 							next(i)->merge(n->next(i));
 						} else {
@@ -149,11 +176,13 @@ class Node {
 						}
 					}
 				}
-				//delete n;
+				// really need to figure out why this isn't working. it's clearly a huge memory leak if we don't delete this.
+				// delete n;
 			}
 		}
 
 		Node * split(Edge ** ptr_backward, int num_backward, char* name) {
+			// still need to test this, implement splitting of counts and indices.
 			Node * node = new Node(name); 
 			for(int i = 0; i < num_backward; i++) {
 				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, 0.0);
@@ -184,11 +213,15 @@ class Node {
 };
 
 class Automata {
+	Node * current;
+	bool doIndex; // do we index pointers to the data, or just count?
 	public:
 		Node * start;
 		Automata (char* fname) {
 			start = new Node("0");
+			current = start;
 			for (int i = 0; i < alphalen; i++) {
+				alphamap[alphabet[i]] = i;
 				start->link(start, i, 0.0);
 			}
 		}
@@ -197,9 +230,30 @@ class Automata {
 			delete start;
 		}
 
+		void reset() {
+			// sets current node back to initial node
+			current = start;
+		}
+
+		void next(char c) {
+			// move to the next node
+			current = current->next(alphamap[c]);
+		}
+
+		void update(char * c){
+			int i = alphamap[*c];
+			current->update(c, i, doIndex);
+			current = current->next(i);
+		}
+
+		void clear() {
+			start->clear();
+			start->unblock();
+		}
+
 		void split(Node*);
 		
-		double run(int ** data);
+		double run();
 
 		int write_gv(char * fname) {
 			// Write the graph to a .gv file
