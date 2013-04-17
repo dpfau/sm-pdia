@@ -279,6 +279,7 @@ class Automata {
 		Node * start;
 		Automata (char* fname) {
 			start = new Node("0");
+			doIndex = true;
 			for (int i = 0; i < alphalen; i++) {
 				alphamap[alphabet[i]] = i;
 				start->link(start, i, 0.0);
@@ -306,8 +307,6 @@ class Automata {
 			start->clear();
 			start->unblock();
 		}
-
-		void split(Node*);
 		
 		int write_gv(char * fname) {
 			// Write the graph to a .gv file
