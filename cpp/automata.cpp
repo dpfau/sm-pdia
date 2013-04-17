@@ -23,11 +23,6 @@
 
 using namespace std;
 
-// Really writing this for speed instead of generality. That means fixing the alphabet at compile time.
-static const int alphalen = 2;
-char alphabet[] = "abcdefghijklmnopqrstuvwxyz ";
-map<char,int> alphamap;
-
 class Node;
 
 struct Datum {
@@ -95,7 +90,8 @@ struct Edge {
 class Node {
 	double cumsum; // normalization factor
 
-	Edge forward[alphalen]; // All the edges of which this node is the tail node. Of a known size so we use a fixed array.
+	int alphalen;
+	Edge * forward; // All the edges of which this node is the tail node.
 	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail.
 
 	bool blocked; // when recursively traversing the graph, eg in deleting or merging, 
@@ -103,10 +99,14 @@ class Node {
 	              // applied to this Node.
 	public:
 		char * name;
-		Node(char * c) {
+		Node(char * c, int n) {
 			name = c;
+			alphalen = n;
+
 			blocked = false;
 			cumsum = alphalen;
+
+			forward = new Edge[alphalen];
 			back = 0;
 			for(int i = 0; i < alphalen; i++) {
 				forward[i].tail  = this;
@@ -122,6 +122,7 @@ class Node {
 					delete next(i);
 				}
 			}
+			delete forward;
 		}
 
 		Node * next(int i) {
@@ -133,7 +134,7 @@ class Node {
 			for (int i = 0; i < alphalen; i++) {
 				forward[i].count = 0;
 				forward[i].data = 0;
-				if (!next(i)->blocked) {
+				if (next(i) != 0 && !next(i)->blocked) {
 					next(i)->clear();
 				}
 			}
@@ -198,7 +199,7 @@ class Node {
 		}
 
 		Node * create_node(int label, char * name) {
-			Node * n = new Node(name);
+			Node * n = new Node(name, alphalen);
 			link(n, label, 0.0);
 			return n;
 		}
@@ -227,7 +228,7 @@ class Node {
 
 		Node * split(Edge ** ptr_backward, int num_backward, char * name) {
 			// still need to test this, implement splitting of counts and indices.
-			Node * node = new Node(name); 
+			Node * node = new Node(name, alphalen); 
 			for(int i = 0; i < num_backward; i++) {
 				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, 0.0);
 				Datum * d = ptr_backward[i]->data;
@@ -253,7 +254,7 @@ class Node {
 			return node;
 		}
 
-		void write_gv(FILE * f) {
+		void write_gv(FILE * f, char * alph) {
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
 				if (next(i) != 0) {
@@ -262,10 +263,10 @@ class Node {
 					fwrite(" -> ", 	        sizeof(char), 4,                     f);
 					fwrite(next(i)->name,   sizeof(char), strlen(next(i)->name), f);
 					fwrite(" [ label = \"", sizeof(char), 12,                    f);
-					fwrite(&alphabet[i],    sizeof(char), 1,                     f);
+					fwrite(alph+i,          sizeof(char), 1,                     f);
 					fwrite("\" ];\n",       sizeof(char), 5,                     f);
 					if (!next(i)->blocked) {
-						next(i)->write_gv(f);
+						next(i)->write_gv(f,alph);
 					}
 				}
 			}
@@ -275,10 +276,15 @@ class Node {
 class Automata {
 	bool doIndex; // do we index pointers to the data, or just count?
 	vector<Datum*> data;
+	char * alphabet;
+	map<char,int> alphamap;
+	int alphalen;
 	public:
 		Node * start;
-		Automata (char* fname) {
-			start = new Node("0");
+		Automata (char * alph) {
+			alphalen = strlen(alph);
+			alphabet = alph;
+			start = new Node("0",alphalen);
 			doIndex = true;
 			for (int i = 0; i < alphalen; i++) {
 				alphamap[alphabet[i]] = i;
@@ -317,7 +323,7 @@ class Automata {
 			if (fout != 0) {
 				char * header = "digraph finite_state_machine {\n\trankdir=LR;\n\tsize=\"8,5\"\n\tnode [shape = doublecircle]; 0;\n\tnode [shape = circle];\n";
 				fwrite(header, sizeof(char), strlen(header), fout);
-				start->write_gv(fout);
+				start->write_gv(fout, alphabet);
 				start->unblock();
 				fwrite("}\n", sizeof(char), 2, fout);
 				fclose(fout);
@@ -328,16 +334,29 @@ class Automata {
 		}
 };
 
-void load_automata() {
-}
+class Even: public Automata {
+	public:
+		Even(): Automata("AB") {
 
-void save_automata() {
-}
+		}
+};
+
+class Reber: public Automata {
+	public:
+		Reber(): Automata("BTPSVXE") {
+
+		}
+};
+class Feldman: public Automata {
+	public:
+		Feldman(): Automata("AB") {
+
+		}
+};
 
 int main(int argc, char ** argv) {
-	char name[] = "foo";
 	Automata * foo;
-	foo = new Automata (name);
+	foo = new Automata ("ab");
 	Node * n1 = foo->start->create_node(0, "1");
 	Node * n2 = foo->start->create_node(1, "2");
 	n2->link(n1, 1, 0.0);
