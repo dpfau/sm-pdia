@@ -18,7 +18,7 @@
 #include <string>
 #include <stdio.h>
 #include <iostream>
-#include <list>
+#include <vector>
 #include <map>
 
 using namespace std;
@@ -30,13 +30,53 @@ map<char,int> alphamap;
 
 class Node;
 
+struct Datum {
+	int val;
+	Datum * left;
+	Datum * right;
+}; // Element of a linked list containing all the data used in batch learning
+
+Datum * insert(Datum * list, Datum * d) { // insert a single element into a circular linked list
+	if (list == 0) {
+		list = d;
+		d->left  = d;
+		d->right = d;
+	} else {
+		d->right = list->right;
+		d->left  = list;
+		list->right->left = d;
+		list->right       = d;
+	}
+	return list;
+}
+
+void remove(Datum * d) {
+	if(d->right != d) {
+		d->right->left = d->left;
+		d->left->right = d->right;
+	}
+}
+
+Datum * splice(Datum * d1, Datum * d2) {
+	if(d1 == 0) { // if there's no data for this edge
+		return d2; // just drop in the data from the other edge
+	} else if (d2 != 0) { // otherwise splice the two lists together
+		d1->right->left = d2;
+		d2->right->left = d1;
+		Datum * foo = d2->right; // placeholder
+		d2->right = d1->right;
+		d1->right = foo;
+	}
+	return d1;
+}
+
 struct Edge {
 	Node * tail;
 	Node * head;
 	int label;
 	double weight;
 	int count;
-	list<void *> idx; // list of all the elements 
+	Datum * data; // circular linked list of every data point that was emitted from this edge
 	Edge * left;
 	Edge * right;
 	Edge() {
@@ -45,6 +85,7 @@ struct Edge {
 		right = this;
 		weight = 1.0;
 		count = 0;
+		data = 0;
 	}
 }; 
 // Edges are stored in two places: an array in the tail node and a circular linked list in the head node. 
@@ -91,18 +132,19 @@ class Node {
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
 				forward[i].count = 0;
-				forward[i].idx.clear();
+				forward[i].data = 0;
 				if (!next(i)->blocked) {
 					next(i)->clear();
 				}
 			}
 		}
 
-		void update(char * c, int i, bool b) {
+		Node * update(Datum * d, int i, bool b) {
 			forward[i].count++;
 			if (b) {
-				forward[i].idx.push_back(c);
+				forward[i].data = insert(forward[i].data, d);
 			}
+			return next(i);
 		}
 
 		double weight(int i) {
@@ -110,6 +152,7 @@ class Node {
 		}
 
 		// Note! This only unlinks the nodes. It does not delete them.
+		// Also note: link and unlink do not change the count and data field of each Edge object.
 		Node * unlink(int i) {
 			Node * n = next(i);
 			if (n != 0) {
@@ -168,7 +211,7 @@ class Node {
 				for (int i = 0; i < alphalen; i++) {
 					if (n->next(i) != 0) { 
 						forward[i].count += n->forward[i].count;
-						forward[i].idx.splice(forward[i].idx.end(), n->forward[i].idx);
+						forward[i].data = splice(forward[i].data, n->forward[i].data);
 						if (next(i) != 0 ) { // if there's a conflict between edges 
 							next(i)->merge(n->next(i));
 						} else {
@@ -177,15 +220,32 @@ class Node {
 					}
 				}
 				// really need to figure out why this isn't working. it's clearly a huge memory leak if we don't delete this.
+				n->clear();
 				// delete n;
 			}
 		}
 
-		Node * split(Edge ** ptr_backward, int num_backward, char* name) {
+		Node * split(Edge ** ptr_backward, int num_backward, char * name) {
 			// still need to test this, implement splitting of counts and indices.
 			Node * node = new Node(name); 
 			for(int i = 0; i < num_backward; i++) {
 				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, 0.0);
+				Datum * d = ptr_backward[i]->data;
+				if (d != 0) {
+					for(int j = 0; j < ptr_backward[i]->count; j++) {
+						int val = (d + 1)->val;
+						if (val != -1) {
+							forward[val].count--;
+							remove(d+1);
+							node->forward[val].count++;
+							node->forward[val].data = insert(node->forward[val].data, d+1);
+						}
+						d = d->left;
+					}
+					if(d != ptr_backward[i]->data) {
+						cout << "This should never happen. Edge.count should equal size of Edge.data if Edge.data is not zero.\n";
+					}
+				}
 			}
 			for(int i = 0; i < alphalen; i++) {
 				node->link(next(i), i, weight(i));
@@ -213,13 +273,12 @@ class Node {
 };
 
 class Automata {
-	Node * current;
 	bool doIndex; // do we index pointers to the data, or just count?
+	vector<Datum*> data;
 	public:
 		Node * start;
 		Automata (char* fname) {
 			start = new Node("0");
-			current = start;
 			for (int i = 0; i < alphalen; i++) {
 				alphamap[alphabet[i]] = i;
 				start->link(start, i, 0.0);
@@ -230,20 +289,17 @@ class Automata {
 			delete start;
 		}
 
-		void reset() {
-			// sets current node back to initial node
-			current = start;
-		}
-
-		void next(char c) {
-			// move to the next node
-			current = current->next(alphamap[c]);
-		}
-
-		void update(char * c){
-			int i = alphamap[*c];
-			current->update(c, i, doIndex);
-			current = current->next(i);
+		void run(char * c) {
+			Node * current = start;
+			int len = strlen(c);
+			Datum * line = new Datum[len+1];
+			data.push_back(line);
+			for(int i = 0; i < len; i++) {
+				int val = alphamap[c[i]];
+				line[i].val = val;
+				current = current->update(&line[i], val, doIndex);
+			}
+			line[len].val = -1; // identifies the end of a line
 		}
 
 		void clear() {
@@ -253,8 +309,6 @@ class Automata {
 
 		void split(Node*);
 		
-		double run();
-
 		int write_gv(char * fname) {
 			// Write the graph to a .gv file
 			char * filename = new char[strlen(fname) + 3];
