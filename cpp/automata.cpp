@@ -152,6 +152,13 @@ class Node {
 			return forward[i].weight;
 		}
 
+		void set_weight(int i, double d) {
+			if (d >= 0) {
+				cumsum += d - forward[i].weight;
+				forward[i].weight = d;				
+			}
+		}
+
 		// Note! This only unlinks the nodes. It does not delete them.
 		// Also note: link and unlink do not change the count and data field of each Edge object.
 		Node * unlink(int i) {
@@ -173,10 +180,7 @@ class Node {
 
 		Node * link(Node * n, int i, double d) {
 			Node * old = unlink(i);
-			if (d != 0.0) {
-				cumsum += d - forward[i].weight;
-				forward[i].weight = d;
-			}
+			set_weight(i, d);
 			forward[i].head = n;
 			if (n->back == 0) { // If this is the first edge with n as its head...
 				n->back = &forward[i]; // ...then make this edge the root of the backward-facing edge linked list
@@ -200,14 +204,14 @@ class Node {
 
 		Node * create_node(int label, char * name) {
 			Node * n = new Node(name, alphalen);
-			link(n, label, 0.0);
+			link(n, label, -1);
 			return n;
 		}
 
 		void merge(Node * n) {
 			if (n != this) {
 				while (n->back != 0) { // unlink the incoming edges from n until there are none left
-					n->back->tail->link(this, n->back->label, 0.0);
+					n->back->tail->link(this, n->back->label, -1);
 				}
 				for (int i = 0; i < alphalen; i++) {
 					if (n->next(i) != 0) { 
@@ -230,7 +234,7 @@ class Node {
 			// still need to test this, implement splitting of counts and indices.
 			Node * node = new Node(name, alphalen); 
 			for(int i = 0; i < num_backward; i++) {
-				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, 0.0);
+				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, -1);
 				Datum * d = ptr_backward[i]->data;
 				if (d != 0) {
 					for(int j = 0; j < ptr_backward[i]->count; j++) {
@@ -254,19 +258,34 @@ class Node {
 			return node;
 		}
 
-		void write_gv(FILE * f, char * alph) {
+		void write(FILE * f) {
+			blocked = true;
+			fprintf(f, "%s\n", name);
+			for (int i = 0; i < alphalen; i++) {
+				if (next(i) != 0) {
+					fprintf(f, "\t%e\t%d\t\n",   forward[i].weight, forward[i].count);
+				} else {
+					fprintf(f, "\t%e\t%d\t%s\n", forward[i].weight, forward[i].count, next(i)->name);
+				}
+			}
+			for (int i = 0; i < alphalen; i++) {
+				if (next(i) != 0 && !next(i)->blocked) {
+					next(i)->write(f);
+				}
+			}
+		}
+
+		void write_gv(FILE * f, char * alph, bool pw) {
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
 				if (next(i) != 0) {
-					fwrite("\t",            sizeof(char), 1,                     f);
-					fwrite(name,            sizeof(char), strlen(name),          f);
-					fwrite(" -> ", 	        sizeof(char), 4,                     f);
-					fwrite(next(i)->name,   sizeof(char), strlen(next(i)->name), f);
-					fwrite(" [ label = \"", sizeof(char), 12,                    f);
-					fwrite(alph+i,          sizeof(char), 1,                     f);
-					fwrite("\" ];\n",       sizeof(char), 5,                     f);
+					if (pw) {
+						fprintf(f, "\t%s -> %s [ label = \"%c/%g\" ];\n", name, next(i)->name, alph[i], weight(i)/cumsum);
+					} else {
+						fprintf(f, "\t%s -> %s [ label = \"%c\" ];\n",    name, next(i)->name, alph[i]);						
+					}
 					if (!next(i)->blocked) {
-						next(i)->write_gv(f,alph);
+						next(i)->write_gv(f,alph,pw);
 					}
 				}
 			}
@@ -288,7 +307,7 @@ class Automata {
 			doIndex = true;
 			for (int i = 0; i < alphalen; i++) {
 				alphamap[alphabet[i]] = i;
-				start->link(start, i, 0.0);
+				start->link(start, i, -1);
 			}
 		}
 
@@ -314,59 +333,67 @@ class Automata {
 			start->unblock();
 		}
 		
-		int write_gv(char * fname) {
+		int write(char * fname) {
+			FILE * fout = fopen(fname,"w");
+			if (fout != 0) {
+				fwrite(alphabet, 1, alphalen, fout);
+				fwrite("\n", 1, 1, fout);
+				start->write(fout);
+				start->unblock();
+				fclose(fout);
+				return 0;
+			}
+			return -1;
+		}
+
+		int write_gv(char * fname, bool pw) {
 			// Write the graph to a .gv file
+			// if pw is true, print weights of the edges
 			char * filename = new char[strlen(fname) + 3];
 			strcpy(filename, fname);
 			strcat(filename, ".gv");
 			FILE * fout = fopen(filename,"w");
 			if (fout != 0) {
 				char * header = "digraph finite_state_machine {\n\trankdir=LR;\n\tsize=\"8,5\"\n\tnode [shape = doublecircle]; 0;\n\tnode [shape = circle];\n";
-				fwrite(header, sizeof(char), strlen(header), fout);
-				start->write_gv(fout, alphabet);
+				fwrite(header, 1, strlen(header), fout);
+				start->write_gv(fout, alphabet, pw);
 				start->unblock();
-				fwrite("}\n", sizeof(char), 2, fout);
+				fwrite("}\n", 1, 2, fout);
 				fclose(fout);
 				return 0;
-			} else {
-				return -1;
-			}
+			} 
+			return -1;
 		}
 };
 
-class Even: public Automata {
-	public:
-		Even(): Automata("AB") {
-
-		}
-};
-
-class Reber: public Automata {
-	public:
-		Reber(): Automata("BTPSVXE") {
-
-		}
-};
-class Feldman: public Automata {
-	public:
-		Feldman(): Automata("AB") {
-
-		}
-};
+Automata * load(char * fname) {
+	/*FILE * f = fopen(fname,"r");
+	if (f != 0) {
+		int alphalen = strcspn()
+		Automata * a = new Automata();
+		fclose(f);
+		return a;
+	}*/
+	return 0;
+}
 
 int main(int argc, char ** argv) {
 	Automata * foo;
 	foo = new Automata ("ab");
 	Node * n1 = foo->start->create_node(0, "1");
 	Node * n2 = foo->start->create_node(1, "2");
-	n2->link(n1, 1, 0.0);
+	n2->link(n1, 1, -1);
 	Node * n3 = n1->create_node(0, "3");
 	Node * n4 = n2->create_node(0, "4");
 	Node * n5 = n3->create_node(1, "5");
-	n4->link(n2, 1, 0.0);
-	n3->link(foo->start, 0, 0.0);
-	foo->write_gv(argv[1]);
+	n4->link(n2, 1, -1);
+	n3->link(foo->start, 0, -1);
+	foo->write("before.txt");
+	foo->write_gv(argv[1], false);
 	n1->merge(n2);
-	foo->write_gv(argv[2]);
+	foo->write("after.txt");
+	foo->write_gv(argv[2], false);
 	delete foo;
+	// Even e;
+	// e.write_gv("even",true);
 }
