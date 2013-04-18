@@ -87,7 +87,7 @@ struct Edge {
 // merging all the edges from a single node.
 
 class Node {
-	double cumsum; // normalization factor
+	double weight; // normalization factor
 	int count; // total counts, summed over all edges
 
 	int alphalen;
@@ -108,7 +108,7 @@ class Node {
 			alphalen = n;
 
 			blocked = false;
-			cumsum = alphalen;
+			weight = alphalen;
 			count = 0;
 
 			forward = new Edge[alphalen];
@@ -158,7 +158,7 @@ class Node {
 			if (i >= 0 && i < alphalen) {
 				return forward[i].weight;
 			} else if (i == -1) {
-				return cumsum;
+				return weight;
 			} else {
 				return 0.0;
 			}
@@ -166,7 +166,7 @@ class Node {
 
 		void set_weight(int i, double d) {
 			if (d >= 0) {
-				cumsum += d - forward[i].weight;
+				weight += d - forward[i].weight;
 				forward[i].weight = d;				
 			}
 		}
@@ -186,7 +186,7 @@ class Node {
 		}
 
 		int sample() {
-			double r = rand()/double(RAND_MAX)*(cumsum + count);
+			double r = rand()/double(RAND_MAX)*(weight + count);
 			double cdf = 0.0;
 			for(int i = 0; i < alphalen; i++) {
 				cdf += get_weight(i) + get_count(i);
@@ -269,6 +269,9 @@ class Node {
 			}
 		}
 
+		void unmerge();
+		void endmerge(); // would be really cool if we could use these as callbacks that we pass to the sampler.
+
 		Node * split(Edge ** ptr_backward, int num_backward, char * name) {
 			// still need to test this
 			Node * node = new Node(name, alphalen); 
@@ -309,6 +312,9 @@ class Node {
 			return node;
 		}
 
+		void unsplit();
+		void endsplit();
+
 		void write(FILE * f) {
 			blocked = true;
 			fprintf(f, "%s\n", name);
@@ -331,7 +337,7 @@ class Node {
 			for (int i = 0; i < alphalen; i++) {
 				if (next(i) != 0) {
 					if (pw) {
-						fprintf(f, "\t%s -> %s [ label = \"%c/%g\" ];\n", name, next(i)->name, alph[i], get_weight(i)/cumsum);
+						fprintf(f, "\t%s -> %s [ label = \"%c/%g\" ];\n", name, next(i)->name, alph[i], get_weight(i)/weight);
 					} else {
 						fprintf(f, "\t%s -> %s [ label = \"%c\" ];\n",    name, next(i)->name, alph[i]);						
 					}
@@ -460,9 +466,9 @@ Automata * load(char * fname) {
 			}
 			idx++;
 			if (idx == len) {
-				n->cumsum = 0;
+				n->weight = 0;
 				for (int i = 0; i < len; i++) {
-					n->cumsum += n->get_weight(i);
+					n->weight += n->get_weight(i);
 					n->count  += n->get_count(i);
 				}
 				idx = -1; // reset once we've scanned all the edges of this node
