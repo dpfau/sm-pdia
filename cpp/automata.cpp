@@ -231,12 +231,16 @@ class Node {
 				}
 				// really need to figure out why this isn't working. it's clearly a huge memory leak if we don't delete this.
 				n->clear();
-				// delete n;
+				n->unblock();
+				for (int i = 0; i < n->alphalen; i++) {
+					n->forward[i].head = 0;
+				}
+				delete n;
 			}
 		}
 
 		Node * split(Edge ** ptr_backward, int num_backward, char * name) {
-			// still need to test this, implement splitting of counts and indices.
+			// still need to test this
 			Node * node = new Node(name, alphalen); 
 			for(int i = 0; i < num_backward; i++) {
 				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, -1);
@@ -452,8 +456,10 @@ int main(int argc, char ** argv) {
 	foo->write("before.txt");
 	foo->write_gv("before", true);
 	n1->merge(n2);
+	cout << "merged\n";
 	foo->write("after.txt");
 	foo->write_gv("after", false);
+	foo->write_gv("after2", false);
 	delete foo;
 
 	//Automata * bar = load("before.txt");
