@@ -88,6 +88,7 @@ struct Edge {
 
 class Node {
 	double cumsum; // normalization factor
+	int count; // total counts, summed over all edges
 
 	int alphalen;
 	Edge * forward; // All the edges of which this node is the tail node.
@@ -108,6 +109,7 @@ class Node {
 
 			blocked = false;
 			cumsum = alphalen;
+			count = 0;
 
 			forward = new Edge[alphalen];
 			back = 0;
@@ -145,14 +147,21 @@ class Node {
 
 		Node * update(Datum * d, int i, bool b) {
 			forward[i].count++;
+			count++;
 			if (b) {
 				forward[i].data = insert(forward[i].data, d);
 			}
 			return next(i);
 		}
 
-		double weight(int i) {
-			return forward[i].weight;
+		double get_weight(int i) {
+			if (i >= 0 && i < alphalen) {
+				return forward[i].weight;
+			} else if (i == -1) {
+				return cumsum;
+			} else {
+				return 0.0;
+			}
 		}
 
 		void set_weight(int i, double d) {
@@ -162,8 +171,28 @@ class Node {
 			}
 		}
 
+		int get_count(int i) {
+			if (i >= 0 && i < alphalen) {
+				return forward[i].count;
+			} else if (i == -1) {
+				return count;
+			} else {
+				return 0;
+			}
+		}
+
 		Edge * edge(int i) {
 			return &forward[i];
+		}
+
+		int sample() {
+			double r = rand()/double(RAND_MAX)*(cumsum + count);
+			double cdf = 0.0;
+			for(int i = 0; i < alphalen; i++) {
+				cdf += get_weight(i) + get_count(i);
+				if(cdf > r) return i;
+			}
+			return alphalen;
 		}
 
 		// Note! This only unlinks the nodes. It does not delete them.
@@ -218,6 +247,7 @@ class Node {
 		void merge(Node * n) {
 			// should rewrite this to return parameters that can be passed to split to undo the merge.
 			if (n != this) {
+				count += n->count;
 				while (n->back != 0) { // unlink the incoming edges from n until there are none left
 					n->back->tail->link(this, n->back->label, -1);
 				}
@@ -259,6 +289,7 @@ class Node {
 										forward[val].data = (d+1)->left;
 									}
 								}
+								node->count++;
 								node->forward[val].count++;
 								node->forward[val].data = insert(node->forward[val].data, d+1);
 							}
@@ -272,7 +303,7 @@ class Node {
 			}
 			for(int i = 0; i < alphalen; i++) {
 				if (next(i) != 0) {
-					node->link(next(i), i, weight(i));
+					node->link(next(i), i, get_weight(i));
 				}
 			}
 			return node;
@@ -300,7 +331,7 @@ class Node {
 			for (int i = 0; i < alphalen; i++) {
 				if (next(i) != 0) {
 					if (pw) {
-						fprintf(f, "\t%s -> %s [ label = \"%c/%g\" ];\n", name, next(i)->name, alph[i], weight(i)/cumsum);
+						fprintf(f, "\t%s -> %s [ label = \"%c/%g\" ];\n", name, next(i)->name, alph[i], get_weight(i)/cumsum);
 					} else {
 						fprintf(f, "\t%s -> %s [ label = \"%c\" ];\n",    name, next(i)->name, alph[i]);						
 					}
@@ -431,7 +462,8 @@ Automata * load(char * fname) {
 			if (idx == len) {
 				n->cumsum = 0;
 				for (int i = 0; i < len; i++) {
-					n->cumsum += n->weight(i);
+					n->cumsum += n->get_weight(i);
+					n->count  += n->get_count(i);
 				}
 				idx = -1; // reset once we've scanned all the edges of this node
 			}
