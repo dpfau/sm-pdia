@@ -24,6 +24,7 @@
 using namespace std;
 
 class Node;
+class Automata;
 
 struct Datum {
 	int val;
@@ -99,7 +100,11 @@ class Node {
 	              // applied to this Node.
 	public:
 		char * name;
+		friend Automata * load(char*);
 		Node(char * c, int n) {
+			if (strlen(c) > 32) {
+				cout << "No node should have a name longer than 32 characters and no computer needs more than 64K of memory.\n";
+			}
 			name = c;
 			alphalen = n;
 
@@ -241,7 +246,7 @@ class Node {
 						int val = (d + 1)->val;
 						if (val != -1) {
 							forward[val].count--;
-							remove(d+1);
+							remove(d+1); // need to make sure this works right when the datum being removed is the root datum for that edge
 							node->forward[val].count++;
 							node->forward[val].data = insert(node->forward[val].data, d+1);
 						}
@@ -262,8 +267,8 @@ class Node {
 			blocked = true;
 			fprintf(f, "%s\n", name);
 			for (int i = 0; i < alphalen; i++) {
-				if (next(i) != 0) {
-					fprintf(f, "\t%e\t%d\t\n",   forward[i].weight, forward[i].count);
+				if (next(i) == 0) {
+					fprintf(f, "\t%e\t%d\tNONE\n",   forward[i].weight, forward[i].count);
 				} else {
 					fprintf(f, "\t%e\t%d\t%s\n", forward[i].weight, forward[i].count, next(i)->name);
 				}
@@ -367,13 +372,64 @@ class Automata {
 };
 
 Automata * load(char * fname) {
-	/*FILE * f = fopen(fname,"r");
+	FILE * f = fopen(fname,"r");
+	Node * n;
+	map<string, Node*>    nodemap;
+	map<string, string*> edgemap;
 	if (f != 0) {
-		int alphalen = strcspn()
-		Automata * a = new Automata();
+		vector<char> line;
+		char c;
+		while((c = fgetc(f)) != '\n') {
+			line.push_back(c);
+		}
+		line.push_back('\0');
+		
+		int len = strlen(&line[0]);
+		char * alph = new char[len];
+		strcpy(alph, &line[0]); // since we're constantly creating and destroying the vector line, we should copy anything we want to keep.
+		Automata * a = new Automata(alph);
+		int idx = -1;
+		while((c = fgetc(f)) != EOF) {
+			line.clear();
+			line.push_back(c);
+			while((c = fgetc(f)) != '\n') {
+				line.push_back(c);
+			}
+			line.push_back('\0');
+
+			if (idx == -1) {
+				string name(&line[0]);
+				if (strcmp(&line[0],"0")==0) { // If this is the initial node
+					n = a->start;
+				} else {
+					n = new Node(name.c_str(),len);
+				}
+				nodemap[name] = n;
+				edgemap[name] = new string[len];
+			} else {
+				char second[32];
+				sscanf(&line[0], "\t%e\t%d\t%s", &(n->forward[idx].weight), &(n->forward[idx].count), second);
+				if(strcmp(second,"NONE") != 0) {
+					string s(second);
+					edgemap[name][idx] = s;
+				}
+			}
+			idx++;
+			if (idx == len) {
+				n->cumsum = 0;
+				for (int i = 0; i < len; i++) {
+					n->cumsum += n->weight(i);
+				}
+				idx = -1; // reset once we've scanned all the edges of this node
+			}
+		}
 		fclose(f);
+		map<string, Node*>::iterator p;
+		for (p = nodemap.begin(); p != nodemap.end(); p++) {
+
+		}
 		return a;
-	}*/
+	}
 	return 0;
 }
 
