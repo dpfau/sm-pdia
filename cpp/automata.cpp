@@ -99,11 +99,11 @@ class Node {
 	              // indicates whether the particular function is in the process of being 
 	              // applied to this Node.
 	public:
-		char * name;
+		const char * name;
 		friend Automata * load(char*);
-		Node(char * c, int n) {
-			if (strlen(c) > 32) {
-				cout << "No node should have a name longer than 32 characters and no computer needs more than 64K of memory.\n";
+		Node(const char * c, int n) {
+			if (strlen(c) > 256) {
+				cout << "No node should have a name longer than 256 characters and no computer needs more than 64K of memory.\n";
 			}
 			name = c;
 			alphalen = n;
@@ -389,6 +389,7 @@ Automata * load(char * fname) {
 		strcpy(alph, &line[0]); // since we're constantly creating and destroying the vector line, we should copy anything we want to keep.
 		Automata * a = new Automata(alph);
 		int idx = -1;
+		string * first;
 		while((c = fgetc(f)) != EOF) {
 			line.clear();
 			line.push_back(c);
@@ -398,21 +399,18 @@ Automata * load(char * fname) {
 			line.push_back('\0');
 
 			if (idx == -1) {
-				string name(&line[0]);
+				first = new string(&line[0]);
 				if (strcmp(&line[0],"0")==0) { // If this is the initial node
 					n = a->start;
 				} else {
-					n = new Node(name.c_str(),len);
+					n = new Node(first->c_str(),len);
 				}
-				nodemap[name] = n;
-				edgemap[name] = new string[len];
+				nodemap[*first] = n;
+				edgemap[*first] = new string[len];
 			} else {
-				char second[32];
+				char second[256];
 				sscanf(&line[0], "\t%e\t%d\t%s", &(n->forward[idx].weight), &(n->forward[idx].count), second);
-				if(strcmp(second,"NONE") != 0) {
-					string s(second);
-					edgemap[name][idx] = s;
-				}
+				edgemap[*first][idx] = *(new string(second));
 			}
 			idx++;
 			if (idx == len) {
@@ -426,7 +424,13 @@ Automata * load(char * fname) {
 		fclose(f);
 		map<string, Node*>::iterator p;
 		for (p = nodemap.begin(); p != nodemap.end(); p++) {
-
+			for (int i = 0; i < len; i++) {
+				if (edgemap[p->first][i] == "NONE") {
+					p->second->forward[i].head = 0;
+				} else {
+					p->second->link(nodemap[edgemap[p->first][i]], i, -1);
+				}
+			}
 		}
 		return a;
 	}
