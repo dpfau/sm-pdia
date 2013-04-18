@@ -453,7 +453,7 @@ int main(int argc, char ** argv) {
 	foo->write_gv("before", true);
 	n1->merge(n2);
 	foo->write("after.txt");
-	foo->write_gv(argv[2], false);
+	foo->write_gv("after", false);
 	delete foo;
 
 	//Automata * bar = load("before.txt");
