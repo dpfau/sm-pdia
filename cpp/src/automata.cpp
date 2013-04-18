@@ -15,22 +15,15 @@
 * David Pfau, 2013
 */
 
-#include <string>
-#include <stdio.h>
-#include <iostream>
-#include <vector>
-#include <map>
+#include "automata.h"
 
-using namespace std;
-
-class Node;
-class Automata;
-
+// Element of a circular linked list containing all the data used in batch learning.
+// The linked list contains every datum that transitions on that edge of the automata.
 struct Datum {
 	int val;
 	Datum * left;
 	Datum * right;
-}; // Element of a linked list containing all the data used in batch learning
+};
 
 Datum * insert(Datum * list, Datum * d) { // insert a single element into a circular linked list
 	if (list == 0) {
@@ -65,13 +58,13 @@ Datum * splice(Datum * d1, Datum * d2) {
 }
 
 struct Edge {
-	Node * tail;
-	Node * head;
-	int label;
-	double weight;
-	int count;
+	Node * tail; // the node for which this is an outgoing edge
+	Node * head; // the node for which this is an incoming edge
+	int label; // the emission symbol for the edge
+	double weight; // the weight or number of pseudocounts for this edge
+	int count; // the number of counts in the data, ie the length of the linked list "data"
 	Datum * data; // circular linked list of every data point that was emitted from this edge
-	Edge * left;
+	Edge * left; // elements of a circular linked list of every incoming edge to the node "head"
 	Edge * right;
 	Edge() {
 		head = 0;
@@ -91,17 +84,16 @@ class Node {
 	int count; // total counts, summed over all edges
 
 	int alphalen;
-	Edge * forward; // All the edges of which this node is the tail node.
-	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail.
+	Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
+	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail. Size is variable.
 
-	bool blocked; // when recursively traversing the graph, eg in deleting or merging, 
-	              // indicates whether the particular function is in the process of being 
-	              // applied to this Node.
+	bool blocked; // when recursively traversing the graph, eg in deleting, merging, or counting,
+	              // indicates whether this node has already been visited.
 	public:
 		const char * name;
 		friend Automata * load(char*);
 		Node(const char * c, int n) {
-			if (strlen(c) > 256) {
+			if (strlen(c) > NAME_LEN) {
 				cout << "No node should have a name longer than 256 characters and no computer needs more than 64K of memory.\n";
 			}
 			name = c;
@@ -181,15 +173,27 @@ class Node {
 			}
 		}
 
+		int count_all() {
+			blocked = true;
+			int count_all = count;
+			for (int i = 0; i < alphalen; i++) {
+				if (next(i) != 0 && !next(i)->blocked) {
+					count_all += next(i)->count_all();
+				}
+			}
+			return count_all;
+		}
+
 		Edge * edge(int i) {
 			return &forward[i];
 		}
 
 		int sample() {
-			double r = rand()/double(RAND_MAX)*(weight + count);
+			double r = rand()/double(RAND_MAX);
 			double cdf = 0.0;
 			for(int i = 0; i < alphalen; i++) {
-				cdf += get_weight(i) + get_count(i);
+				cout << name << " " << i << " " << get_weight(i)/get_weight(-1) << '\n';
+				cdf += (get_weight(i) + get_count(i))/(get_weight(-1) + get_count(-1));
 				if(cdf > r) return i;
 			}
 			return alphalen;
@@ -352,10 +356,10 @@ class Node {
 class Automata {
 	bool doIndex; // do we index pointers to the data, or just count?
 	vector<Datum*> data;
-	char * alphabet;
 	map<char,int> alphamap;
 	int alphalen;
 	public:
+		char * alphabet;
 		Node * start;
 		Automata (char * alph) {
 			alphalen = strlen(alph);
@@ -388,6 +392,12 @@ class Automata {
 		void clear() {
 			start->clear();
 			start->unblock();
+		}
+
+		int count() {
+			int count = start->count_all();
+			start->unblock();
+			return count;
 		}
 		
 		int write(char * fname) {
@@ -422,6 +432,36 @@ class Automata {
 			return -1;
 		}
 };
+
+Generator::Generator(Automata * a) {
+	parent = a;
+	i = parent->start->sample();
+	val = parent->alphabet[i];
+	current = parent->start;
+}
+
+Generator& Generator::operator++() {
+	if (current != 0) {
+		current = current->next(i);
+		if (current == 0) {
+			val = '\0';
+		} else {
+			i = current->sample();
+			val = parent->alphabet[i];
+		}
+	}
+	return *this;
+}
+
+Generator Generator::operator++(int) {
+	Generator tmp(*this);
+	operator++();
+	return tmp;
+}
+
+bool Generator::end() {
+	return (current == 0);
+}
 
 Automata * load(char * fname) {
 	FILE * f = fopen(fname,"r");
@@ -460,7 +500,7 @@ Automata * load(char * fname) {
 				nodemap[*first] = n;
 				edgemap[*first] = new string[len];
 			} else {
-				char second[256];
+				char second[NAME_LEN];
 				sscanf(&line[0], "\t%e\t%d\t%s", &(n->forward[idx].weight), &(n->forward[idx].count), second);
 				edgemap[*first][idx] = *(new string(second));
 			}
@@ -492,29 +532,25 @@ Automata * load(char * fname) {
 }
 
 int main(int argc, char ** argv) {
-	Automata * foo;
-	foo = new Automata ("ab");
-	Node * n1 = foo->start->create_node(0, "1");
-	Node * n2 = foo->start->create_node(1, "2");
-	n2->link(n1, 1, -1);
-	Node * n3 = n1->create_node(0, "3");
-	Node * n4 = n2->create_node(0, "4");
-	Node * n5 = n3->create_node(1, "5");
-	n4->link(n2, 1, -1);
-	n3->link(foo->start, 0, -1);
-	foo->write("before.txt");
-	foo->write_gv("before", true);
-	n1->merge(n2);
-	Edge ** tosplit = new Edge*[2];
-	tosplit[0] = foo->start->edge(1);
-	tosplit[1] = n3->edge(1);
-	Node * n6 = n5->split(tosplit,2,"6");
-	cout << "split\n";
-	foo->write("after.txt");
-	foo->write_gv("after", false);
-	foo->write_gv("after2", false);
-	delete foo;
-
-	Automata * bar = load("before.txt");
-	bar->write_gv("loaded", true);
+	if (argc > 1) {
+		Automata * aut = load(argv[1]);
+		aut->write_gv("even",true);
+		cout << "loaded..\n";
+		if (aut != 0) {
+			for (Generator g(aut); !g.end(); g++) {
+				cout << g.val << '\n';
+			}
+			cout << '\n';
+		} else {
+			cout << "Automata file " << argv[1] << " could not be parsed.\n";
+		}
+	} else {
+		cout << "You need to pass me some arguments, bro.\n";
+		cout << "Usage (not really, I haven't actually implemented this yet):\n";
+		cout << "  -a load automata file from provided file name.\n";
+		cout << "  -f load data to run through automata from provided file name.\n";
+		cout << "  -c input to automata is piped in from command line.\n";
+		cout << "  -g generate a certain number of characters from the automata.\n";
+		cout << "  -p print automata via graphviz with specified format.\n";
+	}
 }
