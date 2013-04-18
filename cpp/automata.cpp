@@ -47,10 +47,8 @@ Datum * insert(Datum * list, Datum * d) { // insert a single element into a circ
 }
 
 void remove(Datum * d) {
-	if(d->right != d) {
-		d->right->left = d->left;
-		d->left->right = d->right;
-	}
+	d->right->left = d->left;
+	d->left->right = d->right;
 }
 
 Datum * splice(Datum * d1, Datum * d2) {
@@ -164,6 +162,10 @@ class Node {
 			}
 		}
 
+		Edge * edge(int i) {
+			return &forward[i];
+		}
+
 		// Note! This only unlinks the nodes. It does not delete them.
 		// Also note: link and unlink do not change the count and data field of each Edge object.
 		Node * unlink(int i) {
@@ -214,6 +216,7 @@ class Node {
 		}
 
 		void merge(Node * n) {
+			// should rewrite this to return parameters that can be passed to split to undo the merge.
 			if (n != this) {
 				while (n->back != 0) { // unlink the incoming edges from n until there are none left
 					n->back->tail->link(this, n->back->label, -1);
@@ -229,9 +232,6 @@ class Node {
 						}
 					}
 				}
-				// really need to figure out why this isn't working. it's clearly a huge memory leak if we don't delete this.
-				n->clear();
-				n->unblock();
 				for (int i = 0; i < n->alphalen; i++) {
 					n->forward[i].head = 0;
 				}
@@ -243,26 +243,37 @@ class Node {
 			// still need to test this
 			Node * node = new Node(name, alphalen); 
 			for(int i = 0; i < num_backward; i++) {
-				ptr_backward[i]->tail->link(node, ptr_backward[i]->label, -1);
-				Datum * d = ptr_backward[i]->data;
-				if (d != 0) {
-					for(int j = 0; j < ptr_backward[i]->count; j++) {
-						int val = (d + 1)->val;
-						if (val != -1) {
-							forward[val].count--;
-							remove(d+1); // need to make sure this works right when the datum being removed is the root datum for that edge
-							node->forward[val].count++;
-							node->forward[val].data = insert(node->forward[val].data, d+1);
+				if (ptr_backward[i]->head == this) { // Just a safety here. Really shouldn't ever pass a pointer to an edge that isn't linked to this node.
+					ptr_backward[i]->tail->link(node, ptr_backward[i]->label, -1);
+					Datum * d = ptr_backward[i]->data;
+					if (d != 0) {
+						for(int j = 0; j < ptr_backward[i]->count; j++) {
+							int val = (d + 1)->val;
+							if (val != -1) {
+								forward[val].count--;
+								remove(d+1);
+								if (d+1 == forward[val].data) {
+									if ((d+1)->left == (d+1)) {
+										forward[val].data = 0;
+									} else {
+										forward[val].data = (d+1)->left;
+									}
+								}
+								node->forward[val].count++;
+								node->forward[val].data = insert(node->forward[val].data, d+1);
+							}
+							d = d->left;
 						}
-						d = d->left;
-					}
-					if(d != ptr_backward[i]->data) {
-						cout << "This should never happen. Edge.count should equal size of Edge.data if Edge.data is not zero.\n";
+						if(d != ptr_backward[i]->data) {
+							cout << "This should never happen. Edge.count should equal size of Edge.data if Edge.data is not zero.\n";
+						}
 					}
 				}
 			}
 			for(int i = 0; i < alphalen; i++) {
-				node->link(next(i), i, weight(i));
+				if (next(i) != 0) {
+					node->link(next(i), i, weight(i));
+				}
 			}
 			return node;
 		}
@@ -456,14 +467,16 @@ int main(int argc, char ** argv) {
 	foo->write("before.txt");
 	foo->write_gv("before", true);
 	n1->merge(n2);
-	cout << "merged\n";
+	Edge ** tosplit = new Edge*[2];
+	tosplit[0] = foo->start->edge(1);
+	tosplit[1] = n3->edge(1);
+	Node * n6 = n5->split(tosplit,2,"6");
+	cout << "split\n";
 	foo->write("after.txt");
 	foo->write_gv("after", false);
 	foo->write_gv("after2", false);
 	delete foo;
 
-	//Automata * bar = load("before.txt");
-	//bar->write_gv("after", true);
-	// Even e;
-	// e.write_gv("even",true);
+	Automata * bar = load("before.txt");
+	bar->write_gv("loaded", true);
 }
