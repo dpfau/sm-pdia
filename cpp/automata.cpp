@@ -374,7 +374,7 @@ class Automata {
 Automata * load(char * fname) {
 	FILE * f = fopen(fname,"r");
 	Node * n;
-	map<string, Node*>    nodemap;
+	map<string, Node*>   nodemap;
 	map<string, string*> edgemap;
 	if (f != 0) {
 		vector<char> line;
@@ -432,6 +432,7 @@ Automata * load(char * fname) {
 				}
 			}
 		}
+		edgemap.clear();
 		return a;
 	}
 	return 0;
@@ -449,11 +450,14 @@ int main(int argc, char ** argv) {
 	n4->link(n2, 1, -1);
 	n3->link(foo->start, 0, -1);
 	foo->write("before.txt");
-	foo->write_gv(argv[1], false);
+	foo->write_gv("before", true);
 	n1->merge(n2);
 	foo->write("after.txt");
 	foo->write_gv(argv[2], false);
 	delete foo;
+
+	//Automata * bar = load("before.txt");
+	//bar->write_gv("after", true);
 	// Even e;
 	// e.write_gv("even",true);
 }
