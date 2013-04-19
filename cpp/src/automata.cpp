@@ -95,7 +95,7 @@ class Node {
 			alphalen = n;
 
 			blocked = false;
-			merge_to = 0;
+			merge_to = this;
 			weight = alphalen;
 			count = 0;
 
@@ -264,29 +264,24 @@ class Node {
 			// should rewrite this to return parameters that can be passed to split to undo the merge.
 			if (n != this) {
 				if (strcmp(n->name,"0") == 0) { // never merge the start node into something
-					cout << "Merging into start node.\n";
 					n->merge(this);
-				} else if (merge_to != 0) {
-					cout << "Merging into " << merge_to->name << '\n';
-					merge_to->merge(n);
-				} else if (n->merge_to != 0) { 
-					cout << "Merging from " << n->merge_to->name << '\n';
+				} else if (n->merge_to != n) { 
 					merge(n->merge_to);
 				} else {
 					n->merge_to = this;
-					count += n->count;
 					cout << name << " <- " << n->name << '\n';
 					while (n->back != 0) { // unlink the incoming edges from n until there are none left
 						n->back->tail->link(this, n->back->label, -1);
 					}
 					for (int i = 0; i < alphalen; i++) {
+						cout << name << ", " << i << ": " << forward[i].count << '\n';
 						if (n->next(i) != 0) { 
-							forward[i].count += n->forward[i].count;
-							forward[i].data = splice(forward[i].data, n->forward[i].data);
+							cout << n->name << ", " << i << ": " << n->forward[i].count << '\n';
+							merge_data(n, i);
 							if (next(i) != 0 ) { // if there's a conflict between edges 
-								next(i)->merge(n->next(i));
+								merge_to->next(i)->merge(n->next(i));
 							} else {
-								forward[i].head = n->next(i);
+								merge_to->forward[i].head = n->next(i);
 							}
 						}
 					}
@@ -295,6 +290,16 @@ class Node {
 					}
 					delete n;
 				}
+			}
+		}
+
+		void merge_data(Node * n, int i) { // helper function for merge
+			if (merge_to == this) {
+				forward[i].count += n->forward[i].count;
+				count            += n->forward[i].count;
+				forward[i].data = splice(forward[i].data, n->forward[i].data);
+			} else {
+				merge_to->merge_data(n, i);
 			}
 		}
 
@@ -384,10 +389,16 @@ class Node {
 				if (forward[i].data != 0) {
 					Datum * current = forward[i].data->left;
 					for (int j = 1; j < forward[i].count; j++) {
-						if (current == forward[i].data) return false;
+						if (current == forward[i].data) {
+							cout << name << ", " << i << ", " << j << '\n';
+							return false;
+						}
 						current = current->left;
 					}
-					if (current != forward[i].data) return false;
+					if (current != forward[i].data) {
+						cout << name << ", " << i << '\n';
+						return false;
+					}
 					if (next(i)!=0 && !next(i)->blocked && !next(i)->check_data()) {
 						return false;
 					}
