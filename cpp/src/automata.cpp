@@ -344,12 +344,33 @@ class Node {
 				}
 			}
 		}
+
+		bool check_data() {
+			// checks that the data structure forward[i].data has the expected length
+			blocked = true;
+			for (int i = 0; i < alphalen; i++) {
+				if (forward[i].data != 0) {
+					Datum * current = forward[i].data->left;
+					cout << forward[i].count << '\n';
+					for (int j = 1; j < forward[i].count; j++) {
+						if (current == forward[i].data) return false;
+						current = current->left;
+					}
+					if (current != forward[i].data) return false;
+					if (next(i)!=0 && !next(i)->blocked && !next(i)->check_data()) {
+						return false;
+					}
+				}
+			}
+			return true;
+		}
 };
 
 class Automata {
 	public:
 		bool doIndex; // do we index pointers to the data, or just count?
 		vector<Datum*> data;
+		vector<int> len; // length of each line
 		map<char,int> alphamap;
 		int alphalen;
 		char * alphabet;
@@ -369,7 +390,7 @@ class Automata {
 			delete start;
 		}
 
-		void run(char * c) {
+		/*void run(char * c) {
 			Node * current = start;
 			int len = strlen(c);
 			Datum * line = new Datum[len+1];
@@ -380,8 +401,9 @@ class Automata {
 				current = current->update(&line[i], val, doIndex);
 			}
 			line[len].val = -1; // identifies the end of a line
-		}
+		}*/
 
+		// see, this block of functions here could probably be turned into one if I used function pointers.
 		void clear() {
 			start->clear();
 			start->unblock();
@@ -391,6 +413,12 @@ class Automata {
 			int count = start->count_all();
 			start->unblock();
 			return count;
+		}
+
+		bool check_data() {
+			bool b = start->check_data();
+			start->unblock();
+			return b;
 		}
 		
 		int write(char * fname) {
@@ -482,9 +510,7 @@ class Counter: public AutomataIterator {
 	const char * line;
 	Datum * data;
 	void count() {
-		if (current == 0) {
-			data->val = -1;
-		} else {
+		if (!end()) {
 			i = parent->alphamap[line[iter]];
 			data->val = i;
 			current->update(data, i, parent->doIndex);
@@ -492,10 +518,11 @@ class Counter: public AutomataIterator {
 	}
 	public:
 		Counter(Automata * a, const char * c): AutomataIterator(a) {
-			len = strlen(c)+1;
+			len = strlen(c);
 			line = c;
 			data = new Datum[len];
-			a->data.push_back(data);
+			parent->data.push_back(data);
+			parent->len.push_back(len);
 			count();
 		}
 
@@ -641,9 +668,14 @@ int main(int argc, char ** argv) {
 					string data;
 					fin.open(argv[2]);
 					fin >> data;
+					cout << aut->check_data() << '\n';
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
 					cout << aut->count() << '\n';
+					cout << aut->check_data() << '\n';
+					aut->start->next(0)->merge(aut->start->next(1));
+					cout << aut->count() << '\n';
+					cout << aut->check_data() << '\n';
 					break;
 				}
 				case 'g':
