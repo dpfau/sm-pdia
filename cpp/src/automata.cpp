@@ -17,14 +17,6 @@
 
 #include "automata.h"
 
-// Element of a circular linked list containing all the data used in batch learning.
-// The linked list contains every datum that transitions on that edge of the automata.
-struct Datum {
-	int val;
-	Datum * left;
-	Datum * right;
-};
-
 Datum * insert(Datum * list, Datum * d) { // insert a single element into a circular linked list
 	if (list == 0) {
 		list = d;
@@ -57,33 +49,34 @@ Datum * splice(Datum * d1, Datum * d2) {
 	return d1;
 }
 
-struct Edge {
-	Node * tail; // the node for which this is an outgoing edge
-	Node * head; // the node for which this is an incoming edge
-	int label; // the emission symbol for the edge
-	double weight; // the weight or number of pseudocounts for this edge
-	int count; // the number of counts in the data, ie the length of the linked list "data"
-	Datum * data; // circular linked list of every data point that was emitted from this edge
-	Edge * left; // elements of a circular linked list of every incoming edge to the node "head"
-	Edge * right;
-	Edge() {
-		head = 0;
-		left = this;
-		right = this;
-		weight = 1.0;
-		count = 0;
-		data = 0;
-	}
-}; 
 // Edges are stored in two places: an array in the tail node and a circular linked list in the head node. 
 // This allows constant insertion and deletion into the head list both when manipulating a single edge and when
 // merging all the edges from a single node.
 
 class Node {
+	struct Edge {
+		Node * tail; // the node for which this is an outgoing edge
+		Node * head; // the node for which this is an incoming edge
+		int label; // the emission symbol for the edge
+		double weight; // the weight or number of pseudocounts for this edge
+		int count; // the number of counts in the data, ie the length of the linked list "data"
+		Datum * data; // circular linked list of every data point that was emitted from this edge
+		Edge * left; // elements of a circular linked list of every incoming edge to the node "head"
+		Edge * right;
+		Edge() {
+			head = 0;
+			left = this;
+			right = this;
+			weight = 1.0;
+			count = 0;
+			data = 0;
+		}
+	}; 
+
 	double weight; // normalization factor
 	int count; // total counts, summed over all edges
-
 	int alphalen;
+
 	Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
 	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail. Size is variable.
 
@@ -357,6 +350,7 @@ class Automata {
 	vector<Datum*> data;
 	map<char,int> alphamap;
 	int alphalen;
+	friend Counter::count();
 	public:
 		char * alphabet;
 		Node * start;
@@ -432,38 +426,126 @@ class Automata {
 		}
 };
 
-Generator::Generator(Automata * a, int n) {
-	parent = a;
-	len = n;
-	iter = 0;
-	i = parent->start->sample();
-	val = parent->alphabet[i];
-	current = parent->start;
-}
+class AutomataIterator{
+	protected:
+		Automata * parent;
+		Node * current;
+		int i, iter, len;
+	public:
+		AutomataIterator(Automata * a) { 
+			parent = a;
+			current = parent->start;
+			iter = 0;
+		}
+		AutomataIterator& operator++();
+		AutomataIterator  operator++(int);
+		bool end() {
+			return (current ==  0 || iter >= len);
+		}
+};
 
-Generator& Generator::operator++() {
-	if (current != 0) {
-		current = current->next(i);
+class Scorer: public AutomataIterator {
+	char * line;
+	void value() {
 		if (current == 0) {
-			val = '\0';
+			val = 1.0;
 		} else {
+			i = a->alphamap[line[iter]];
+			val = (current->get_weight(i) + current->get_count(i))/(current->get_weight(-1) + current->get_count(-1));
+		}
+	}
+	public:
+		double val;
+		Scorer(Automata * a, char * c): AutomataIterator(a) {
+			len = strlen(c);
+			line = c;
+			value();
+		}
+
+		Scorer& operator++() {
+			if (current != 0) {
+				current = current->next(i);
+				iter++;
+				value();
+			}
+			return *this;
+		}
+
+		Scorer operator++(int) {
+			Scorer tmp(*this);
+			operator++();
+			return tmp;
+		}
+};
+
+class Counter: public AutomataIterator {
+	char * line;
+	Datum * data;
+	void count() {
+		if (current == 0) {
+			data.val = -1;
+		} else {
+			i = a->alphamap[line[iter]];
+			data.val = i;
+			current->update(data, i, a->doIndex);
+		}
+	}
+	public:
+		Counter(Automata * a, char * c): AutomataIterator(a) {
+			len = strlen(c)+1;
+			line = c;
+			data = new Datum[len];
+			a->data.push_back(data);
+			count();
+		}
+
+		Counter& operator++() {
+			if (current != 0) {
+				current = current->next(i);
+				data++;
+				iter++;
+				count();
+			}
+			return *this;
+		}
+
+		Counter operator++(int) {
+			Counter tmp(*this);
+			operator++();
+			return tmp;
+		}
+};
+
+class Generator: public AutomataIterator {
+	int i;
+	public:
+		char val;
+		Generator(Automata * a, int n): AutomataIterator(a) {
+			len = n;
 			i = current->sample();
 			val = parent->alphabet[i];
 		}
-	}
-	iter++;
-	return *this;
-}
 
-Generator Generator::operator++(int) {
-	Generator tmp(*this);
-	operator++();
-	return tmp;
-}
+		Generator& operator++() {
+			if (current != 0) {
+				current = current->next(i);
+				if (current == 0) {
+					val = '\0';
+				} else {
+					i = current->sample();
+					val = parent->alphabet[i];
+				}
+			}
+			iter++;
+			return *this;
+		}
 
-bool Generator::end() {
-	return (current == 0 || iter >= len);
-}
+		Generator operator++(int) {
+			Generator tmp(*this);
+			operator++();
+			return tmp;
+		}
+};
 
 Automata * load(char * fname) {
 	FILE * f = fopen(fname,"r");
