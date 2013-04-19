@@ -109,7 +109,6 @@ class Node {
 
 		~Node() {
 			blocked = true;
-			cout << "Deleting " << name << "\n";
 			for (int i = 0; i < alphalen; i++) {
 				if (next(i) != 0 && !next(i)->blocked) {
 					delete next(i);
@@ -269,14 +268,11 @@ class Node {
 					merge(n->merge_to);
 				} else {
 					n->merge_to = this;
-					cout << name << " <- " << n->name << '\n';
 					while (n->back != 0) { // unlink the incoming edges from n until there are none left
 						n->back->tail->link(this, n->back->label, -1);
 					}
 					for (int i = 0; i < alphalen; i++) {
-						cout << name << ", " << i << ": " << forward[i].count << '\n';
 						if (n->next(i) != 0) { 
-							cout << n->name << ", " << i << ": " << n->forward[i].count << '\n';
 							merge_data(n, i);
 							if (next(i) != 0 ) { // if there's a conflict between edges 
 								merge_to->next(i)->merge(n->next(i));
