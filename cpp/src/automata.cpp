@@ -192,7 +192,6 @@ class Node {
 			double r = rand()/double(RAND_MAX);
 			double cdf = 0.0;
 			for(int i = 0; i < alphalen; i++) {
-				cout << name << " " << i << " " << get_weight(i)/get_weight(-1) << '\n';
 				cdf += (get_weight(i) + get_count(i))/(get_weight(-1) + get_count(-1));
 				if(cdf > r) return i;
 			}
@@ -324,9 +323,9 @@ class Node {
 			fprintf(f, "%s\n", name);
 			for (int i = 0; i < alphalen; i++) {
 				if (next(i) == 0) {
-					fprintf(f, "\t%e\t%d\tNONE\n",   forward[i].weight, forward[i].count);
+					fprintf(f, "\t%lg\t%d\tNONE\n",   forward[i].weight, forward[i].count);
 				} else {
-					fprintf(f, "\t%e\t%d\t%s\n", forward[i].weight, forward[i].count, next(i)->name);
+					fprintf(f, "\t%lg\t%d\t%s\n", forward[i].weight, forward[i].count, next(i)->name);
 				}
 			}
 			for (int i = 0; i < alphalen; i++) {
@@ -433,8 +432,10 @@ class Automata {
 		}
 };
 
-Generator::Generator(Automata * a) {
+Generator::Generator(Automata * a, int n) {
 	parent = a;
+	len = n;
+	iter = 0;
 	i = parent->start->sample();
 	val = parent->alphabet[i];
 	current = parent->start;
@@ -450,6 +451,7 @@ Generator& Generator::operator++() {
 			val = parent->alphabet[i];
 		}
 	}
+	iter++;
 	return *this;
 }
 
@@ -460,7 +462,7 @@ Generator Generator::operator++(int) {
 }
 
 bool Generator::end() {
-	return (current == 0);
+	return (current == 0 || iter >= len);
 }
 
 Automata * load(char * fname) {
@@ -501,7 +503,7 @@ Automata * load(char * fname) {
 				edgemap[*first] = new string[len];
 			} else {
 				char second[NAME_LEN];
-				sscanf(&line[0], "\t%e\t%d\t%s", &(n->forward[idx].weight), &(n->forward[idx].count), second);
+				sscanf(&line[0], "\t%lg\t%d\t%s", &(n->forward[idx].weight), &(n->forward[idx].count), second);
 				edgemap[*first][idx] = *(new string(second));
 			}
 			idx++;
@@ -537,8 +539,8 @@ int main(int argc, char ** argv) {
 		aut->write_gv("even",true);
 		cout << "loaded..\n";
 		if (aut != 0) {
-			for (Generator g(aut); !g.end(); g++) {
-				cout << g.val << '\n';
+			for (Generator g(aut,atoi(argv[2])); !g.end(); g++) {
+				cout << g.val;
 			}
 			cout << '\n';
 		} else {
