@@ -10,9 +10,9 @@ class Node;
 class Automata;
 
 class AutomataIterator;
-class Scorer:    public AutomataIterator;
-class Counter:   public AutomataIterator;
-class Generator: public AutomataIterator;
+class Scorer;
+class Counter;
+class Generator;
 
 // Element of a circular linked list containing all the data used in batch learning.
 // The linked list contains every datum that transitions on that edge of the automata.

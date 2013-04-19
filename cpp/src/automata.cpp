@@ -16,6 +16,7 @@
 */
 
 #include "automata.h"
+#include <fstream>
 
 Datum * insert(Datum * list, Datum * d) { // insert a single element into a circular linked list
 	if (list == 0) {
@@ -346,12 +347,11 @@ class Node {
 };
 
 class Automata {
-	bool doIndex; // do we index pointers to the data, or just count?
-	vector<Datum*> data;
-	map<char,int> alphamap;
-	int alphalen;
-	friend Counter::count();
 	public:
+		bool doIndex; // do we index pointers to the data, or just count?
+		vector<Datum*> data;
+		map<char,int> alphamap;
+		int alphalen;
 		char * alphabet;
 		Node * start;
 		Automata (char * alph) {
@@ -445,18 +445,18 @@ class AutomataIterator{
 };
 
 class Scorer: public AutomataIterator {
-	char * line;
+	const char * line;
 	void value() {
 		if (current == 0) {
 			val = 1.0;
 		} else {
-			i = a->alphamap[line[iter]];
+			i = parent->alphamap[line[iter]];
 			val = (current->get_weight(i) + current->get_count(i))/(current->get_weight(-1) + current->get_count(-1));
 		}
 	}
 	public:
 		double val;
-		Scorer(Automata * a, char * c): AutomataIterator(a) {
+		Scorer(Automata * a, const char * c): AutomataIterator(a) {
 			len = strlen(c);
 			line = c;
 			value();
@@ -479,19 +479,19 @@ class Scorer: public AutomataIterator {
 };
 
 class Counter: public AutomataIterator {
-	char * line;
+	const char * line;
 	Datum * data;
 	void count() {
 		if (current == 0) {
-			data.val = -1;
+			data->val = -1;
 		} else {
-			i = a->alphamap[line[iter]];
-			data.val = i;
-			current->update(data, i, a->doIndex);
+			i = parent->alphamap[line[iter]];
+			data->val = i;
+			current->update(data, i, parent->doIndex);
 		}
 	}
 	public:
-		Counter(Automata * a, char * c): AutomataIterator(a) {
+		Counter(Automata * a, const char * c): AutomataIterator(a) {
 			len = strlen(c)+1;
 			line = c;
 			data = new Datum[len];
@@ -548,6 +548,7 @@ class Generator: public AutomataIterator {
 };
 
 Automata * load(char * fname) {
+	// Right now, if a file isn't properly parsed it won't throw an error, it'll just get stuck forever.
 	FILE * f = fopen(fname,"r");
 	Node * n;
 	map<string, Node*>   nodemap;
@@ -618,13 +619,40 @@ Automata * load(char * fname) {
 int main(int argc, char ** argv) {
 	if (argc > 1) {
 		Automata * aut = load(argv[1]);
-		aut->write_gv("even",true);
-		cout << "loaded..\n";
+		char use = 'c'; // for now do this by hand
 		if (aut != 0) {
-			for (Generator g(aut,atoi(argv[2])); !g.end(); g++) {
-				cout << g.val;
+			switch(use) {
+				case 'a':
+					break;
+				case 's': // would be nice if we could write another case that pipes it in from the command line (cin instead of fin?)
+				{
+					ifstream fin;
+					string data;
+					fin.open(argv[2]);
+					fin >> data;
+					for (Scorer s(aut,data.c_str()); !s.end(); s++) {
+						cout << s.val << '\n';
+					}
+					break;
+				}
+				case 'c':
+				{
+					ifstream fin;
+					string data;
+					fin.open(argv[2]);
+					fin >> data;
+					for (Counter c(aut,data.c_str()); !c.end(); c++);
+					break;
+				}
+				case 'g':
+					for (Generator g(aut,atoi(argv[2])); !g.end(); g++) {
+						cout << g.val;
+					}
+					break;
+				case 'p':
+					aut->write_gv(argv[2],true);
+					break;
 			}
-			cout << '\n';
 		} else {
 			cout << "Automata file " << argv[1] << " could not be parsed.\n";
 		}
@@ -632,8 +660,8 @@ int main(int argc, char ** argv) {
 		cout << "You need to pass me some arguments, bro.\n";
 		cout << "Usage (not really, I haven't actually implemented this yet):\n";
 		cout << "  -a load automata file from provided file name.\n";
-		cout << "  -f load data to run through automata from provided file name.\n";
-		cout << "  -c input to automata is piped in from command line.\n";
+		cout << "  -s score data loaded from filename.\n";
+		cout << "  -c count data loaded from filename.\n";
 		cout << "  -g generate a certain number of characters from the automata.\n";
 		cout << "  -p print automata via graphviz with specified format.\n";
 	}
