@@ -81,7 +81,8 @@ class Node {
 	Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
 	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail. Size is variable.
 
-	bool blocked; // when recursively traversing the graph, eg in deleting, merging, or counting,
+	Node * merge_to; // If merge has already been called on this node, indicates the node into which this is being merged.
+	bool blocked; // when recursively traversing the graph, eg in deleting or counting,
 	              // indicates whether this node has already been visited.
 	public:
 		const char * name;
@@ -94,6 +95,7 @@ class Node {
 			alphalen = n;
 
 			blocked = false;
+			merge_to = 0;
 			weight = alphalen;
 			count = 0;
 
@@ -178,6 +180,23 @@ class Node {
 			return count_all;
 		}
 
+		// for debugging only, should give same answer as count_all()
+		int count_data() {
+			blocked = true;
+			int count_data = 0;
+			for (int i = 0; i < alphalen; i++) {
+				Datum * current = forward[i].data;
+				do {
+					count_data++;
+					current = current->left;
+				} while (current != forward[i].data);
+				if (next(i) != 0 && !next(i)->blocked) {
+					count_data += next(i)->count_data();
+				}
+			}
+			return count_data;
+		}
+
 		Edge * edge(int i) {
 			return &forward[i];
 		}
@@ -244,25 +263,38 @@ class Node {
 		void merge(Node * n) {
 			// should rewrite this to return parameters that can be passed to split to undo the merge.
 			if (n != this) {
-				count += n->count;
-				while (n->back != 0) { // unlink the incoming edges from n until there are none left
-					n->back->tail->link(this, n->back->label, -1);
-				}
-				for (int i = 0; i < alphalen; i++) {
-					if (n->next(i) != 0) { 
-						forward[i].count += n->forward[i].count;
-						forward[i].data = splice(forward[i].data, n->forward[i].data);
-						if (next(i) != 0 ) { // if there's a conflict between edges 
-							next(i)->merge(n->next(i));
-						} else {
-							forward[i].head = n->next(i);
+				if (strcmp(n->name,"0") == 0) { // never merge the start node into something
+					cout << "Merging into start node.\n";
+					n->merge(this);
+				} else if (merge_to != 0) {
+					cout << "Merging into " << merge_to->name << '\n';
+					merge_to->merge(n);
+				} else if (n->merge_to != 0) { 
+					cout << "Merging from " << n->merge_to->name << '\n';
+					merge(n->merge_to);
+				} else {
+					n->merge_to = this;
+					count += n->count;
+					cout << name << " <- " << n->name << '\n';
+					while (n->back != 0) { // unlink the incoming edges from n until there are none left
+						n->back->tail->link(this, n->back->label, -1);
+					}
+					for (int i = 0; i < alphalen; i++) {
+						if (n->next(i) != 0) { 
+							forward[i].count += n->forward[i].count;
+							forward[i].data = splice(forward[i].data, n->forward[i].data);
+							if (next(i) != 0 ) { // if there's a conflict between edges 
+								next(i)->merge(n->next(i));
+							} else {
+								forward[i].head = n->next(i);
+							}
 						}
 					}
+					for (int i = 0; i < n->alphalen; i++) {
+						n->forward[i].head = 0;
+					}
+					delete n;
 				}
-				for (int i = 0; i < n->alphalen; i++) {
-					n->forward[i].head = 0;
-				}
-				delete n;
 			}
 		}
 
@@ -351,7 +383,6 @@ class Node {
 			for (int i = 0; i < alphalen; i++) {
 				if (forward[i].data != 0) {
 					Datum * current = forward[i].data->left;
-					cout << forward[i].count << '\n';
 					for (int j = 1; j < forward[i].count; j++) {
 						if (current == forward[i].data) return false;
 						current = current->left;
@@ -411,6 +442,13 @@ class Automata {
 
 		int count() {
 			int count = start->count_all();
+			start->unblock();
+			return count;
+		}
+
+		// this should return the same value as above, so this is just being used for debugging purposes
+		int count_data() {
+			int count = start->count_data();
 			start->unblock();
 			return count;
 		}
@@ -672,9 +710,11 @@ int main(int argc, char ** argv) {
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
 					cout << aut->count() << '\n';
+					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
 					aut->start->next(0)->merge(aut->start->next(1));
 					cout << aut->count() << '\n';
+					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
 					break;
 				}
