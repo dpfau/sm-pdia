@@ -642,6 +642,8 @@ int main(int argc, char ** argv) {
 					fin.open(argv[2]);
 					fin >> data;
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
+					for (Counter c(aut,data.c_str()); !c.end(); c++);
+					cout << aut->count() << '\n';
 					break;
 				}
 				case 'g':
