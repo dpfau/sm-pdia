@@ -379,9 +379,6 @@ class Node {
 							}
 							d = d->left;
 						}
-						if(d != ptr_backward[i]->data) {
-							cout << "This should never happen. Edge.count should equal size of Edge.data if Edge.data is not zero.\n";
-						}
 					}
 				}
 			}
