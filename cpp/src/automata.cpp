@@ -1,16 +1,10 @@
 /*
 * automata.cpp
 * 
-* God Help me, I'm going to try to write this automata class in C++.
-*
-* Should be able to use it on the command line like so:
-*
-* cat alice_in_wonderland.txt | automat foo.aut > foo.cnt
-*
-* which takes the file alice_in_wonderland.txt, runs it through the automata
-* saved in foo.aut and outputs the results to a file foo.cnt which contains
-* a data structure that maps each state to the points in the text that are
-* in that state.
+* God Help me, I'm going to try to write this automata class in C++. And,
+* after a week-long sprint (April 14 to April 20) it seems I have. Though
+* I still have to implement the callbacks for merge and split, the rest of
+* it seems to work quite well.
 *
 * David Pfau, 2013
 */
