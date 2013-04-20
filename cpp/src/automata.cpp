@@ -187,6 +187,7 @@ class Node {
 			for (int i = 0; i < alphalen; i++) {
 				Datum * current = forward[i].data;
 				if (current != 0) {
+					int foo = 0;
 					do {
 						count_data++;
 						current = current->left;
@@ -197,6 +198,31 @@ class Node {
 				}
 			}
 			return count_data;
+		}
+
+		int check_data() {
+			// checks that the data structure forward[i].data has the expected length
+			blocked = true;
+			for (int i = 0; i < alphalen; i++) {
+				if (forward[i].data != 0) {
+					Datum * current = forward[i].data->left;
+					for (int j = 1; j < forward[i].count; j++) {
+						if (current == forward[i].data) {
+							cout << name << ", " << i << ", " << j << '\n';
+							return 0;
+						}
+						current = current->left;
+					}
+					if (current != forward[i].data) {
+						cout << name << ", " << i << '\n';
+						return 0;
+					}
+					if (next(i)!=0 && !next(i)->blocked && !next(i)->check_data()) {
+						return 0;
+					}
+				}
+			}
+			return 1;
 		}
 
 		Edge * edge(int i) {
@@ -330,9 +356,8 @@ class Node {
 
 		void merge_callback(); // depending on whether the sampler accepts or rejects, delete the merged nodes or undo the merge
 
-		Node * split(Edge ** ptr_backward, int num_backward, char * name) {
-			// still need to test this
-			Node * node = new Node(name, alphalen); 
+		Node * split(Edge ** ptr_backward, int num_backward, char * new_name) {
+			Node * node = new Node(new_name, alphalen); 
 			for(int i = 0; i < num_backward; i++) {
 				if (ptr_backward[i]->head == this) { // Just a safety here. Really shouldn't ever pass a pointer to an edge that isn't linked to this node.
 					ptr_backward[i]->tail->link(node, ptr_backward[i]->label, -1);
@@ -342,6 +367,7 @@ class Node {
 							int val = (d + 1)->val;
 							if (val != -1) {
 								forward[val].count--;
+								count--;
 								remove(d+1);
 								if (d+1 == forward[val].data) {
 									if ((d+1)->left == (d+1)) {
@@ -403,31 +429,6 @@ class Node {
 					}
 				}
 			}
-		}
-
-		int check_data() {
-			// checks that the data structure forward[i].data has the expected length
-			blocked = true;
-			for (int i = 0; i < alphalen; i++) {
-				if (forward[i].data != 0) {
-					Datum * current = forward[i].data->left;
-					for (int j = 1; j < forward[i].count; j++) {
-						if (current == forward[i].data) {
-							cout << name << ", " << i << ", " << j << '\n';
-							return 0;
-						}
-						current = current->left;
-					}
-					if (current != forward[i].data) {
-						cout << name << ", " << i << '\n';
-						return 0;
-					}
-					if (next(i)!=0 && !next(i)->blocked && !next(i)->check_data()) {
-						return 0;
-					}
-				}
-			}
-			return 1;
 		}
 };
 
@@ -743,13 +744,12 @@ int main(int argc, char ** argv) {
 					aut->write(argv[3]);
 					break;
 				case 't': // whatever I'm testing right now
-					srand(time(0));
-					for (int i = 0; i < 1000; i++) cout << aut->sample_node()->name << "\n";
-				/*{
-					ifstream fin;
+					//srand(time(0));
+					//for (int i = 0; i < 1000; i++) cout << aut->sample_node()->name << "\n";
+				{
 					string data;
-					fin.open(argv[2]);
-					fin >> data;
+					cin >> data;
+					cout << data.size() << '\n';
 					cout << aut->check_data() << '\n';
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
@@ -762,7 +762,7 @@ int main(int argc, char ** argv) {
 					cout << aut->count() << '\n';
 					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
-				}*/
+				}
 			}
 		} else {
 			cout << "Automata file " << argv[1] << " could not be parsed, or option " << argv[2] << " was improperly formatted.\n";
