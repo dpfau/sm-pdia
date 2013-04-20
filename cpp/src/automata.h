@@ -9,6 +9,8 @@ using namespace std;
 class Node;
 class Automata;
 
+typedef int (Node::*NodeFn)(); // function pointer for member functions of Node.
+
 class AutomataIterator;
 class Scorer;
 class Counter;

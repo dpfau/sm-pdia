@@ -121,7 +121,7 @@ class Node {
 			return forward[i].head;
 		}
 
-		void clear() {
+		int clear() {
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
 				forward[i].count = 0;
@@ -130,6 +130,7 @@ class Node {
 					next(i)->clear();
 				}
 			}
+			return 0;
 		}
 
 		Node * update(Datum * d, int i, bool b) {
@@ -378,7 +379,7 @@ class Node {
 			}
 		}
 
-		bool check_data() {
+		int check_data() {
 			// checks that the data structure forward[i].data has the expected length
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
@@ -387,20 +388,20 @@ class Node {
 					for (int j = 1; j < forward[i].count; j++) {
 						if (current == forward[i].data) {
 							cout << name << ", " << i << ", " << j << '\n';
-							return false;
+							return 0;
 						}
 						current = current->left;
 					}
 					if (current != forward[i].data) {
 						cout << name << ", " << i << '\n';
-						return false;
+						return 0;
 					}
 					if (next(i)!=0 && !next(i)->blocked && !next(i)->check_data()) {
-						return false;
+						return 0;
 					}
 				}
 			}
-			return true;
+			return 1;
 		}
 };
 
@@ -428,43 +429,17 @@ class Automata {
 			delete start;
 		}
 
-		/*void run(char * c) {
-			Node * current = start;
-			int len = strlen(c);
-			Datum * line = new Datum[len+1];
-			data.push_back(line);
-			for(int i = 0; i < len; i++) {
-				int val = alphamap[c[i]];
-				line[i].val = val;
-				current = current->update(&line[i], val, doIndex);
-			}
-			line[len].val = -1; // identifies the end of a line
-		}*/
-
-		// see, this block of functions here could probably be turned into one if I used function pointers.
-		void clear() {
-			start->clear();
+		int accumulate(NodeFn f) {
+			int i = (start->*f)();
 			start->unblock();
+			return i;
 		}
 
-		int count() {
-			int count = start->count_all();
-			start->unblock();
-			return count;
-		}
-
-		// this should return the same value as above, so this is just being used for debugging purposes
-		int count_data() {
-			int count = start->count_data();
-			start->unblock();
-			return count;
-		}
-
-		bool check_data() {
-			bool b = start->check_data();
-			start->unblock();
-			return b;
-		}
+		// so simple!
+		void clear()     {        accumulate(&Node::clear);      }
+		int count()      { return accumulate(&Node::count_all);  }
+		int count_data() { return accumulate(&Node::count_data); } // this should return the same value as above, so this is just being used for debugging purposes
+		int check_data() { return accumulate(&Node::check_data); }
 		
 		int write(char * fname) {
 			FILE * fout = fopen(fname,"w");
@@ -621,6 +596,7 @@ class Generator: public AutomataIterator {
 
 Automata * load(char * fname) {
 	// Right now, if a file isn't properly parsed it won't throw an error, it'll just get stuck forever.
+	// My god I could probably rewrite this all in like 15 lines using ifsteam.
 	FILE * f = fopen(fname,"r");
 	Node * n;
 	map<string, Node*>   nodemap;
@@ -713,16 +689,7 @@ int main(int argc, char ** argv) {
 					string data;
 					fin.open(argv[2]);
 					fin >> data;
-					cout << aut->check_data() << '\n';
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
-					for (Counter c(aut,data.c_str()); !c.end(); c++);
-					cout << aut->count() << '\n';
-					cout << aut->count_data() << '\n';
-					cout << aut->check_data() << '\n';
-					aut->start->next(0)->merge(aut->start->next(1));
-					cout << aut->count() << '\n';
-					cout << aut->count_data() << '\n';
-					cout << aut->check_data() << '\n';
 					break;
 				}
 				case 'g':
@@ -733,6 +700,23 @@ int main(int argc, char ** argv) {
 				case 'p':
 					aut->write_gv(argv[2],true);
 					break;
+				case 't': // whatever I'm testing right now
+				{
+					ifstream fin;
+					string data;
+					fin.open(argv[2]);
+					fin >> data;
+					cout << aut->check_data() << '\n';
+					for (Counter c(aut,data.c_str()); !c.end(); c++);
+					for (Counter c(aut,data.c_str()); !c.end(); c++);
+					cout << aut->count() << '\n';
+					cout << aut->count_data() << '\n';
+					cout << aut->check_data() << '\n';
+					//aut->start->next(0)->split(, n, aut->doIndex);
+					cout << aut->count() << '\n';
+					cout << aut->count_data() << '\n';
+					cout << aut->check_data() << '\n';
+				}
 			}
 		} else {
 			cout << "Automata file " << argv[1] << " could not be parsed.\n";
