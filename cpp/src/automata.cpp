@@ -77,14 +77,13 @@ class Node {
 	int count; // total counts, summed over all edges
 	int alphalen;
 
+	Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
 	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail. Size is variable.
 
 	Node * merge_to; // If merge has already been called on this node, indicates the node into which this is being merged.
 	bool blocked; // when recursively traversing the graph, eg in deleting or counting,
 	              // indicates whether this node has already been visited.
 	public:
-		// I really don't want to keep this public. This is just a hack until I can figure out a better calling convention for splitting.
-		Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
 		const char * name;
 		friend Automata * load(char*);
 		Node(const char * c, int n) {
@@ -121,7 +120,7 @@ class Node {
 			return forward[i].head;
 		}
 
-		int clear() {
+		int clear() { // set all counts to zero
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
 				forward[i].count = 0;
@@ -133,7 +132,7 @@ class Node {
 			return 0;
 		}
 
-		Node * update(Datum * d, int i, bool b) {
+		Node * update(Datum * d, int i, bool b) { // add new Datum to the Automata
 			forward[i].count++;
 			count++;
 			if (b) {
@@ -142,7 +141,7 @@ class Node {
 			return next(i);
 		}
 
-		double get_weight(int i) {
+		double get_weight(int i) { // Accessor methods for the edge weights. -1 returns sum of weights. (though the way it's implemented now, forward is public anyway)
 			if (i >= 0 && i < alphalen) {
 				return forward[i].weight;
 			} else if (i == -1) {
@@ -159,7 +158,7 @@ class Node {
 			}
 		}
 
-		int get_count(int i) {
+		int get_count(int i) { // Accessor methods for edge counts. -1 returns sum of counts.
 			if (i >= 0 && i < alphalen) {
 				return forward[i].count;
 			} else if (i == -1) {
@@ -169,7 +168,7 @@ class Node {
 			}
 		}
 
-		int count_all() {
+		int count_all() { // Accumulate counts over all nodes
 			blocked = true;
 			int count_all = count;
 			for (int i = 0; i < alphalen; i++) {
@@ -180,8 +179,7 @@ class Node {
 			return count_all;
 		}
 
-		// for debugging only, should give same answer as count_all()
-		int count_data() {
+		int count_data() { // for debugging only, should give same answer as count_all()
 			blocked = true;
 			int count_data = 0;
 			for (int i = 0; i < alphalen; i++) {
@@ -200,8 +198,7 @@ class Node {
 			return count_data;
 		}
 
-		int check_data() {
-			// checks that the data structure forward[i].data has the expected length
+		int check_data() {	// checks that the data structure forward[i].data has the expected length
 			blocked = true;
 			for (int i = 0; i < alphalen; i++) {
 				if (forward[i].data != 0) {
@@ -226,7 +223,7 @@ class Node {
 		}
 
 		Edge * edge(int i) {
-			return &forward[i];
+			return forward + i;
 		}
 
 		int sample() {
@@ -744,8 +741,8 @@ int main(int argc, char ** argv) {
 					aut->write(argv[3]);
 					break;
 				case 't': // whatever I'm testing right now
-					//srand(time(0));
-					//for (int i = 0; i < 1000; i++) cout << aut->sample_node()->name << "\n";
+				srand(time(0));
+				for (int i = 0; i < 1000; i++) cout << aut->sample_node()->name << "\n";
 				{
 					string data;
 					cin >> data;
@@ -757,7 +754,7 @@ int main(int argc, char ** argv) {
 					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
 					Edge ** edges = new Edge*[1];
-					edges[0] = &(aut->start->next(0)->forward[1]);
+					edges[0] = aut->start->next(0)->edge(1);
 					aut->start->next(0)->next(1)->split(edges, 1, "foo");
 					cout << aut->count() << '\n';
 					cout << aut->count_data() << '\n';
