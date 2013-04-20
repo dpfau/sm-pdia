@@ -406,6 +406,11 @@ class Node {
 };
 
 class Automata {
+	int accumulate(NodeFn f) {
+		int i = (start->*f)();
+		start->unblock();
+		return i;
+	}
 	public:
 		bool doIndex; // do we index pointers to the data, or just count?
 		vector<Datum*> data;
@@ -427,12 +432,6 @@ class Automata {
 
 		~Automata () {
 			delete start;
-		}
-
-		int accumulate(NodeFn f) {
-			int i = (start->*f)();
-			start->unblock();
-			return i;
 		}
 
 		// so simple!
