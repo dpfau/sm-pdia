@@ -83,6 +83,7 @@ class Node {
 	bool blocked; // when recursively traversing the graph, eg in deleting or counting,
 	              // indicates whether this node has already been visited.
 	public:
+		// I really don't want to keep this public. This is just a hack until I can figure out a better calling convention for splitting.
 		Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
 		const char * name;
 		friend Automata * load(char*);
@@ -203,10 +204,10 @@ class Node {
 		}
 
 		int sample() {
-			double r = rand()/double(RAND_MAX);
+			double r = rand()/double(RAND_MAX)*(get_weight(-1) + get_count(-1));
 			double cdf = 0.0;
 			for(int i = 0; i < alphalen; i++) {
-				cdf += (get_weight(i) + get_count(i))/(get_weight(-1) + get_count(-1));
+				cdf += get_weight(i) + get_count(i);
 				if(cdf > r) return i;
 			}
 			return alphalen;
@@ -261,8 +262,34 @@ class Node {
 			return n;
 		}
 
+		Pair sample_node() {
+			blocked = true;
+			int tot = 1;
+			Pair * p = new Pair[alphalen];
+			for (int i = 0; i < alphalen; i++) {
+				if (next(i) != 0 && !next(i)->blocked) {
+					p[i] = next(i)->sample_node();
+				}
+				tot += p[i].count;
+			}
+			Pair to_return;
+			to_return.count = tot;
+			double r = rand() / double(RAND_MAX) * tot;
+			double cdf = 0.0;
+			for (int i = 0; i < alphalen; i++) {
+				cdf += p[i].count;
+				if (cdf > r) {
+					to_return.node = p[i].node;
+					break;
+				}
+			}
+			if (to_return.node == 0) to_return.node = this;
+			delete p;
+			return to_return;
+		}
+
 		void merge(Node * n) {
-			// should rewrite this to return parameters that can be passed to split to undo the merge.
+			// should rewrite this to return parameters that can be passed to unmerge to undo the merge.
 			if (n != this) {
 				if (strcmp(n->name,"0") == 0) { // never merge the start node into something
 					n->merge(this);
@@ -301,8 +328,7 @@ class Node {
 			}
 		}
 
-		void unmerge();
-		void endmerge(); // would be really cool if we could use these as callbacks that we pass to the sampler.
+		void merge_callback(); // depending on whether the sampler accepts or rejects, delete the merged nodes or undo the merge
 
 		Node * split(Edge ** ptr_backward, int num_backward, char * name) {
 			// still need to test this
@@ -344,8 +370,7 @@ class Node {
 			return node;
 		}
 
-		void unsplit();
-		void endsplit();
+		void split_callback();
 
 		void write(FILE * f) {
 			blocked = true;
@@ -440,6 +465,12 @@ class Automata {
 		int count()      { return accumulate(&Node::count_all);  }
 		int count_data() { return accumulate(&Node::count_data); } // this should return the same value as above, so this is just being used for debugging purposes
 		int check_data() { return accumulate(&Node::check_data); }
+
+		Node * sample_node() { // returns node sampled uniformly from all the nodes in the graph
+			Node * n = start->sample_node().node;
+			start->unblock();
+			return n;
+		}
 		
 		int write(char * fname) {
 			FILE * fout = fopen(fname,"w");
@@ -665,19 +696,21 @@ Automata * load(char * fname) {
 }
 
 int main(int argc, char ** argv) {
-	if (argc > 1) {
+	if (argc > 2) {
 		Automata * aut = load(argv[1]);
-		char use = 't'; // for now do this by hand
-		if (aut != 0) {
-			switch(use) {
-				case 'a':
-					break;
+		if (aut != 0 && (argv[2])[0] == '-') {
+			switch((argv[2])[1]) {
 				case 's': // would be nice if we could write another case that pipes it in from the command line (cin instead of fin?)
 				{
-					ifstream fin;
 					string data;
-					fin.open(argv[2]);
-					fin >> data;
+					if (argc > 3) {
+						ifstream fin;
+						fin.open(argv[3]);
+						fin >> data;
+						fin.close();
+					} else {
+						cin >> data;
+					}
 					for (Scorer s(aut,data.c_str()); !s.end(); s++) {
 						cout << s.val << '\n';
 					}
@@ -685,23 +718,34 @@ int main(int argc, char ** argv) {
 				}
 				case 'c':
 				{
-					ifstream fin;
 					string data;
-					fin.open(argv[2]);
-					fin >> data;
+					if (argc > 3) {
+						ifstream fin;
+						fin.open(argv[3]);
+						fin >> data;
+						fin.close();
+					} else {
+						cin >> data;
+					}
 					for (Counter c(aut,data.c_str()); !c.end(); c++);
 					break;
 				}
 				case 'g':
-					for (Generator g(aut,atoi(argv[2])); !g.end(); g++) {
+					srand(time(0));
+					for (Generator g(aut,atoi(argv[3])); !g.end(); g++) {
 						cout << g.val;
 					}
 					break;
 				case 'p':
-					aut->write_gv(argv[2],true);
+					aut->write_gv(argv[3],true);
+					break;
+				case 'w':
+					aut->write(argv[3]);
 					break;
 				case 't': // whatever I'm testing right now
-				{
+					srand(time(0));
+					for (int i = 0; i < 1000; i++) cout << aut->sample_node()->name << "\n";
+				/*{
 					ifstream fin;
 					string data;
 					fin.open(argv[2]);
@@ -718,18 +762,19 @@ int main(int argc, char ** argv) {
 					cout << aut->count() << '\n';
 					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
-				}
+				}*/
 			}
 		} else {
-			cout << "Automata file " << argv[1] << " could not be parsed.\n";
+			cout << "Automata file " << argv[1] << " could not be parsed, or option " << argv[2] << " was improperly formatted.\n";
 		}
 	} else {
-		cout << "You need to pass me some arguments, bro.\n";
-		cout << "Usage (not really, I haven't actually implemented this yet):\n";
-		cout << "  -a load automata file from provided file name.\n";
+		cout << "You need to pass me more arguments, bro.\n";
+		cout << "Usage: automat <automata file name> -<option> <option paramterer>\n";
+		cout << "Options:\n";
 		cout << "  -s score data loaded from filename.\n";
 		cout << "  -c count data loaded from filename.\n";
 		cout << "  -g generate a certain number of characters from the automata.\n";
 		cout << "  -p print automata via graphviz with specified format.\n";
+		cout << "  -w write automata to text file.\n";
 	}
 }

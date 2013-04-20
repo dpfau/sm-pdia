@@ -25,6 +25,12 @@ struct Datum {
 	Datum * right;
 };
 
+struct Pair {
+	Node * node;
+	int count;
+	Pair() { node = 0; count = 0; }
+};
+
 Datum * insert(Datum * list, Datum * d);
 void remove(Datum * d);
 Datum * splice(Datum * d1, Datum * d2);
