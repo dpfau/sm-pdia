@@ -53,38 +53,37 @@ Datum * splice(Datum * d1, Datum * d2) {
 // Edges are stored in two places: an array in the tail node and a circular linked list in the head node. 
 // This allows constant insertion and deletion into the head list both when manipulating a single edge and when
 // merging all the edges from a single node.
+struct Edge {
+	Node * tail; // the node for which this is an outgoing edge
+	Node * head; // the node for which this is an incoming edge
+	int label; // the emission symbol for the edge
+	double weight; // the weight or number of pseudocounts for this edge
+	int count; // the number of counts in the data, ie the length of the linked list "data"
+	Datum * data; // circular linked list of every data point that was emitted from this edge
+	Edge * left; // elements of a circular linked list of every incoming edge to the node "head"
+	Edge * right;
+	Edge() {
+		head = 0;
+		left = this;
+		right = this;
+		weight = 1.0;
+		count = 0;
+		data = 0;
+	}
+}; 
 
 class Node {
-	struct Edge {
-		Node * tail; // the node for which this is an outgoing edge
-		Node * head; // the node for which this is an incoming edge
-		int label; // the emission symbol for the edge
-		double weight; // the weight or number of pseudocounts for this edge
-		int count; // the number of counts in the data, ie the length of the linked list "data"
-		Datum * data; // circular linked list of every data point that was emitted from this edge
-		Edge * left; // elements of a circular linked list of every incoming edge to the node "head"
-		Edge * right;
-		Edge() {
-			head = 0;
-			left = this;
-			right = this;
-			weight = 1.0;
-			count = 0;
-			data = 0;
-		}
-	}; 
-
 	double weight; // normalization factor
 	int count; // total counts, summed over all edges
 	int alphalen;
 
-	Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
 	Edge * back; // Root of a circular linked list of all the edges of which this node is the tail. Size is variable.
 
 	Node * merge_to; // If merge has already been called on this node, indicates the node into which this is being merged.
 	bool blocked; // when recursively traversing the graph, eg in deleting or counting,
 	              // indicates whether this node has already been visited.
 	public:
+		Edge * forward; // All the edges of which this node is the tail node. Size is fixed as alphalen.
 		const char * name;
 		friend Automata * load(char*);
 		Node(const char * c, int n) {
@@ -186,12 +185,14 @@ class Node {
 			int count_data = 0;
 			for (int i = 0; i < alphalen; i++) {
 				Datum * current = forward[i].data;
-				do {
-					count_data++;
-					current = current->left;
-				} while (current != forward[i].data);
-				if (next(i) != 0 && !next(i)->blocked) {
-					count_data += next(i)->count_data();
+				if (current != 0) {
+					do {
+						count_data++;
+						current = current->left;
+					} while (current != forward[i].data);
+					if (next(i) != 0 && !next(i)->blocked) {
+						count_data += next(i)->count_data();
+					}
 				}
 			}
 			return count_data;
@@ -666,7 +667,7 @@ Automata * load(char * fname) {
 int main(int argc, char ** argv) {
 	if (argc > 1) {
 		Automata * aut = load(argv[1]);
-		char use = 'c'; // for now do this by hand
+		char use = 't'; // for now do this by hand
 		if (aut != 0) {
 			switch(use) {
 				case 'a':
@@ -711,7 +712,9 @@ int main(int argc, char ** argv) {
 					cout << aut->count() << '\n';
 					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
-					//aut->start->next(0)->split(, n, aut->doIndex);
+					Edge ** edges = new Edge*[1];
+					edges[0] = &(aut->start->next(0)->forward[1]);
+					aut->start->next(0)->next(1)->split(edges, 1, "foo");
 					cout << aut->count() << '\n';
 					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';

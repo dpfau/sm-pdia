@@ -6,6 +6,7 @@
 
 using namespace std;
 
+struct Edge;
 class Node;
 class Automata;
 
