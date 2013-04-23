@@ -1,6 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <fstream>
+#include <cmath>
 
 #define NAME_LEN 256  // maximum length of a name for a node
 

@@ -11,6 +11,7 @@
 
 #include "automata.h"
 #include <fstream>
+#include <cmath>
 
 Datum * insert(Datum * list, Datum * d) { // insert a single element into a circular linked list
 	if (list == 0) {
@@ -305,6 +306,18 @@ class Node {
 			return to_return;
 		}
 
+		double score() { // return the log likelihood of this node, and accumulate from child nodes
+			blocked = true;
+			double d = lgamma(get_weight(-1)) - lgamma(get_weight(-1) + get_count(-1));
+			for (int i = 0; i < alphalen; i++) {
+				d += lgamma(get_weight(i) + get_count(i)) - lgamma(get_weight(i)); 
+				if (next(i) != 0 && !next(i)->blocked){
+					d += next(i)->score();
+				}
+			}
+			return d;
+		}
+
 		void merge(Node * n) {
 			// should rewrite this to return parameters that can be passed to unmerge to undo the merge.
 			if (n != this) {
@@ -449,7 +462,7 @@ class Automata {
 			delete start;
 		}
 
-		// so simple!
+		// so simple! except for anything of another type...
 		void clear()     {        accumulate(&Node::clear);      }
 		int count()      { return accumulate(&Node::count_all);  }
 		int count_data() { return accumulate(&Node::count_data); } // this should return the same value as above, so this is just being used for debugging purposes
@@ -459,6 +472,12 @@ class Automata {
 			Node * n = start->sample_node().node;
 			start->unblock();
 			return n;
+		}
+
+		double score() {
+			double d = start->score();
+			start->unblock();
+			return d;
 		}
 		
 		int write(char * fname) {
@@ -617,57 +636,50 @@ class Generator: public AutomataIterator {
 Automata * load(char * fname) {
 	// Right now, if a file isn't properly parsed it won't throw an error, it'll just get stuck forever.
 	// My god I could probably rewrite this all in like 15 lines using ifsteam.
-	FILE * f = fopen(fname,"r");
-	Node * n;
-	map<string, Node*>   nodemap;
-	map<string, string*> edgemap;
-	if (f != 0) {
-		vector<char> line;
-		char c;
-		while((c = fgetc(f)) != '\n') {
-			line.push_back(c);
-		}
-		line.push_back('\0');
+	ifstream fin;
+	fin.open(fname);
+	if (fin) {
+		Node * n;
+		map<string, Node*>   nodemap;
+		map<string, string*> edgemap;
+		string line;
+		getline(fin, line);
 		
-		int len = strlen(&line[0]);
+		int len = line.size();
 		char * alph = new char[len];
-		strcpy(alph, &line[0]); // since we're constantly creating and destroying the vector line, we should copy anything we want to keep.
+		strcpy(alph, line.c_str()); // since we're constantly creating and destroying the vector line, we should copy anything we want to keep.
 		Automata * a = new Automata(alph);
 		int idx = -1;
-		string * first;
-		while((c = fgetc(f)) != EOF) {
-			line.clear();
-			line.push_back(c);
-			while((c = fgetc(f)) != '\n') {
-				line.push_back(c);
-			}
-			line.push_back('\0');
-
-			if (idx == -1) {
-				first = new string(&line[0]);
-				if (strcmp(&line[0],"0")==0) { // If this is the initial node
-					n = a->start;
+		string first;
+		while(fin) {
+			getline(fin, line);
+			if (line != "") {
+				if (idx == -1) {
+					first = line;
+					if (first=="0") { // If this is the initial node
+						n = a->start;
+					} else {
+						n = new Node(first.c_str(),len);
+					}
+					nodemap[first] = n;
+					edgemap[first] = new string[len];
 				} else {
-					n = new Node(first->c_str(),len);
+					char second[NAME_LEN];
+					sscanf(line.c_str(), "\t%lg\t%d\t%s", &(n->forward[idx].weight), &(n->forward[idx].count), second);
+					edgemap[first][idx] = *(new string(second));
 				}
-				nodemap[*first] = n;
-				edgemap[*first] = new string[len];
-			} else {
-				char second[NAME_LEN];
-				sscanf(&line[0], "\t%lg\t%d\t%s", &(n->forward[idx].weight), &(n->forward[idx].count), second);
-				edgemap[*first][idx] = *(new string(second));
-			}
-			idx++;
-			if (idx == len) {
-				n->weight = 0;
-				for (int i = 0; i < len; i++) {
-					n->weight += n->get_weight(i);
-					n->count  += n->get_count(i);
+				idx++;
+				if (idx == len) {
+					n->weight = 0;
+					for (int i = 0; i < len; i++) {
+						n->weight += n->get_weight(i);
+						n->count  += n->get_count(i);
+					}
+					idx = -1; // reset once we've scanned all the edges of this node
 				}
-				idx = -1; // reset once we've scanned all the edges of this node
 			}
 		}
-		fclose(f);
+		fin.close();
 		map<string, Node*>::iterator p;
 		for (p = nodemap.begin(); p != nodemap.end(); p++) {
 			for (int i = 0; i < len; i++) {
