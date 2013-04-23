@@ -10,8 +10,6 @@
 */
 
 #include "automata.h"
-#include <fstream>
-#include <cmath>
 
 Datum * insert(Datum * list, Datum * d) { // insert a single element into a circular linked list
 	if (list == 0) {
@@ -221,6 +219,18 @@ class Node {
 			return forward + i;
 		}
 
+		vector<Edge*> sample_inlink() {
+			vector<Edge*> v;
+			Edge * current = back;
+			do {
+				if (rand() % 2 == 0) {
+					v.push_back(current);
+				}
+				current = current->left;
+			} while (current != back);
+			return v;
+		}
+
 		int sample() {
 			double r = rand()/double(RAND_MAX)*(get_weight(-1) + get_count(-1));
 			double cdf = 0.0;
@@ -358,11 +368,17 @@ class Node {
 			}
 		}
 
-		void merge_callback(); // depending on whether the sampler accepts or rejects, delete the merged nodes or undo the merge
+		void merge_callback(bool accept){ // depending on whether the sampler accepts or rejects, delete the merged nodes or undo the merge
+			if (accept) {
 
-		Node * split(Edge ** ptr_backward, int num_backward, char * new_name) {
+			} else {
+
+			}
+		}
+
+		Node * split(vector<Edge*> & ptr_backward, char * new_name) {
 			Node * node = new Node(new_name, alphalen); 
-			for(int i = 0; i < num_backward; i++) {
+			for(int i = 0; i < ptr_backward.size(); i++) {
 				if (ptr_backward[i]->head == this) { // Just a safety here. Really shouldn't ever pass a pointer to an edge that isn't linked to this node.
 					ptr_backward[i]->tail->link(node, ptr_backward[i]->label, -1);
 					Datum * d = ptr_backward[i]->data;
@@ -397,7 +413,13 @@ class Node {
 			return node;
 		}
 
-		void split_callback();
+		void split_callback(bool accept) {
+			if (accept) {
+
+			} else {
+				
+			}
+		}
 
 		void write(FILE * f) {
 			blocked = true;
@@ -439,6 +461,7 @@ class Automata {
 		start->unblock();
 		return i;
 	}
+	int maxNode; // used for giving names to new nodes
 	public:
 		bool doIndex; // do we index pointers to the data, or just count?
 		vector<Datum*> data;
@@ -452,6 +475,7 @@ class Automata {
 			alphabet = alph;
 			start = new Node("0",alphalen);
 			doIndex = true;
+			maxNode = 1;
 			for (int i = 0; i < alphalen; i++) {
 				alphamap[alphabet[i]] = i;
 				start->link(start, i, -1);
@@ -478,6 +502,21 @@ class Automata {
 			double d = start->score();
 			start->unblock();
 			return d;
+		}
+
+		void merge() {
+			Node * n1 = sample_node();
+			Node * n2 = sample_node();
+			n1->merge(n2);
+		}
+
+		void split() {
+			Node * n = sample_node();
+			vector<Edge*> v = n->sample_inlink();
+			char c[NAME_LEN];
+			sprintf(c,"%d",maxNode);
+			n->split(v, c);
+			maxNode++;
 		}
 		
 		int write(char * fname) {
@@ -756,9 +795,9 @@ int main(int argc, char ** argv) {
 					cout << aut->count() << '\n';
 					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
-					Edge ** edges = new Edge*[1];
-					edges[0] = aut->start->next(0)->edge(1);
-					aut->start->next(0)->next(1)->split(edges, 1, "foo");
+					vector<Edge *> edges;
+					edges.push_back(aut->start->next(0)->edge(1));
+					aut->start->next(0)->next(1)->split(edges, "foo");
 					cout << aut->count() << '\n';
 					cout << aut->count_data() << '\n';
 					cout << aut->check_data() << '\n';
